@@ -15,9 +15,11 @@ import { track } from "@/lib/analytics";
  * `useState` drives the conditional reason block — it only appears for low
  * scores (1–3) — while `useActionState` drives submit / pending / success.
  *
- * 사전 신청(이메일)도 이 폼에서 함께 묻는다. 체험을 마쳤거나 중간에 그만둔
- * 사람만 이 화면에 도착하므로, 랜딩에는 사전 신청·소감 어느 쪽도 노출되지
- * 않는다. 이메일은 끝까지 선택 항목이라 비워둔 채로도 소감이 접수된다.
+ * 사전 신청(이메일)과 사용자 인터뷰 의향도 이 폼에서 함께 묻는다. 체험을
+ * 마쳤거나 중간에 그만둔 사람만 이 화면에 도착하므로, 랜딩에는 사전 신청·소감
+ * 어느 쪽도 노출되지 않는다. 이메일은 끝까지 선택 항목이라 비워둔 채로도
+ * 소감이 접수된다. 단, 인터뷰 의향에 체크하면 연락할 방법이 필요하므로
+ * 연락처가 필수가 된다(서버에서 최종 검증).
  */
 
 const RATINGS = [
@@ -57,6 +59,8 @@ export function RegisterForm() {
   // 의견이 그 왕복에서 사라지면 앞뒤가 맞지 않는다.
   const [contact, setContact] = useState<string>("");
   const [comment, setComment] = useState<string>("");
+  // 인터뷰 의향 체크박스도 controlled — 비제어면 오류 왕복에서 체크가 풀린다.
+  const [interview, setInterview] = useState<boolean>(false);
   const showReason = rating !== null && rating <= 3;
   const ratingError = state.status === "error" ? state.errors?.rating : undefined;
   const contactError = state.status === "error" ? state.errors?.contact : undefined;
@@ -71,6 +75,7 @@ export function RegisterForm() {
         rating: rating ?? undefined,
         has_contact: contact.trim().length > 0,
         subscribed: !!state.subscribed,
+        interview_opted_in: !!state.interviewRequested,
       });
     }
   }, [state, rating, contact]);
@@ -85,7 +90,13 @@ export function RegisterForm() {
           {state.subscribed ? "소감과 사전 신청, 잘 받았어요" : "소감을 보냈어요"}
         </h2>
         <p className="text-[15px] leading-[1.6] text-sys-label-neutral">
-          {state.subscribed ? (
+          {state.interviewRequested ? (
+            <>
+              고마워요! 남겨주신 연락처로 인터뷰 일정을
+              <br />
+              곧 여쭤보고, 출시 소식도 가장 먼저 알려드릴게요.
+            </>
+          ) : state.subscribed ? (
             <>
               고마워요! 준비가 되면
               <br />
@@ -266,12 +277,52 @@ export function RegisterForm() {
             {contactError}
           </span>
         )}
+
+        {/* 인터뷰 의향 — 항상 선택. 체크하면 연락할 방법이 필요해져 연락처가
+            필수로 승격된다(최종 검증은 서버). 연락처 입력과 같은 묶음에 두어
+            "이 연락처로 인터뷰 연락이 간다"는 관계가 눈에 보이게 한다. */}
+        <label
+          className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-4 py-3 transition-colors ${
+            interview
+              ? "border-sys-primary bg-sys-primary-lighter"
+              : "border-sys-line bg-sys-bg hover:border-sys-primary-lighter"
+          }`}
+        >
+          <input
+            type="checkbox"
+            name="interview"
+            checked={interview}
+            onChange={(e) => setInterview(e.target.checked)}
+            className="peer sr-only"
+          />
+          <span className="mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] border-sys-label-alt text-sys-on-primary peer-checked:border-sys-primary peer-checked:bg-sys-primary peer-focus-visible:ring-2 peer-focus-visible:ring-sys-primary peer-focus-visible:ring-offset-2">
+            {interview && <Icon name="check" size={12} strokeWidth={3} />}
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-medium text-sys-label-strong">
+              출시 전 15~20분 인터뷰에 참여할 수 있어요
+            </span>
+            <span className="text-[12px] leading-[1.5] text-sys-label-alt">
+              체험하며 느끼신 점을 편하게 듣는 자리예요. 남겨주신 연락처로
+              일정을 여쭤볼게요.
+            </span>
+          </span>
+        </label>
+        {interview && contact.trim().length === 0 && !contactError && (
+          <p className="text-[12px] font-semibold leading-[1.5] text-sys-primary-dark">
+            인터뷰 연락을 드리려면 위에 이메일이나 휴대폰 번호를 남겨주세요.
+          </p>
+        )}
+
         {/* 수집 항목·목적·보유기간을 적는 지점. 연락처는 선택 항목이라 별도
-            동의 체크박스 대신 고지와 링크로 갈음한다. 처리방침은 새 탭으로 열어
-            작성 중인 소감이 날아가지 않게 한다. */}
+            동의 체크박스 대신 고지와 링크로 갈음한다. 이용 목적(출시 안내·
+            인터뷰 요청)은 체크 여부와 무관하게 항상 명시한다 — 연락처를 남긴
+            분에게는 인터뷰를 여쭤볼 수 있기 때문. 인터뷰에 체크하면 연락처가
+            필수가 되어 "비워도 된다"는 안내만 조건부로 감춘다. 처리방침은 새
+            탭으로 열어 작성 중인 소감이 날아가지 않게 한다. */}
         <p className="text-[12px] leading-[1.5] text-sys-label-alt">
-          적어주신 연락처는 출시 안내에만 쓰고, 안내를 보낸 뒤 바로 지워요.
-          비워두셔도 괜찮아요.{" "}
+          적어주신 연락처는 출시 안내와 인터뷰 요청 연락에 쓰일 수 있고, 쓰임을
+          다한 뒤 바로 지워요.{interview ? "" : " 비워두셔도 괜찮아요."}{" "}
           <Link
             href="/privacy"
             target="_blank"

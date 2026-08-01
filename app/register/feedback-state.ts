@@ -18,6 +18,8 @@ export type FeedbackState = {
   errors?: { rating?: string; contact?: string };
   /** 성공 시 사전 신청까지 남겼는지 — 완료 문구를 가르는 데만 쓴다. */
   subscribed?: boolean;
+  /** 성공 시 인터뷰 의향까지 남겼는지 — 완료 문구와 로그에만 쓴다. */
+  interviewRequested?: boolean;
 };
 
 export const initialFeedbackState: FeedbackState = { status: "idle" };

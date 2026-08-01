@@ -6,9 +6,11 @@
  * Collects a 5-point satisfaction rating (and, only for low scores, an optional
  * reason) from someone who just tried the product, then forwards it to a Google
  * Apps Script Web App that appends one row to the target sheet. The same form
- * also asks — always optionally — whether they want to be told when we launch;
- * that 사전 신청 연락처는 체험을 마친 사람에게만 묻는다 (랜딩에는 없다).
- * 비워도 소감은 그대로 접수된다. The webhook URL and shared token live
+ * also asks — always optionally — whether they want to be told when we launch
+ * and whether they'd join a short user interview; that 사전 신청 연락처는
+ * 체험을 마친 사람에게만 묻는다 (랜딩에는 없다). 비워도 소감은 그대로
+ * 접수된다. 단, 인터뷰 의향에 체크했다면 연락할 방법이 있어야 하므로
+ * 연락처가 필수가 된다. The webhook URL and shared token live
  * only in server env vars.
  *
  * 이 파일은 최상단 `"use server"` 모듈이므로 **async 함수만** export한다.
@@ -55,6 +57,8 @@ export async function submitFeedback(
 
   // 사전 신청은 언제나 선택 — 적었을 때만 형식을 본다.
   const contact = ((formData.get("contact") as string) || "").trim();
+  // 인터뷰 의향 — 체크박스라 체크했을 때만 "on"이 실려 온다.
+  const interview = (formData.get("interview") as string) === "on";
 
   // 두 오류를 함께 돌려준다: 만족도에서 먼저 끊으면 잘못 적은 연락처를 한 번 더
   // 제출해야 알게 된다.
@@ -65,7 +69,14 @@ export async function submitFeedback(
   if (!ratingRaw || !Number.isInteger(rating) || rating < 1 || rating > 5) {
     errors.rating = "만족도를 선택해 주세요.";
   }
-  if (contact && (contact.length > CONTACT_MAX || !isValidContact(contact))) {
+  // 인터뷰에 응하겠다는 분에게는 연락할 방법이 있어야 한다 — 이때만 연락처가
+  // 필수로 승격된다. 클라이언트에서도 안내하지만 우회될 수 있으니 서버가 최종.
+  if (interview && !contact) {
+    errors.contact = "인터뷰 연락을 드리려면 이메일이나 휴대폰 번호가 필요해요.";
+  } else if (
+    contact &&
+    (contact.length > CONTACT_MAX || !isValidContact(contact))
+  ) {
     errors.contact = "이메일 주소나 휴대폰 번호를 다시 확인해 주세요.";
   }
   if (Object.keys(errors).length > 0) {
@@ -108,6 +119,9 @@ export async function submitFeedback(
         reason,
         comment,
         contact,
+        // 시트에서 바로 읽히게 문자열로 보낸다. Apps Script 쪽에도 이 필드를
+        // 받는 열을 추가해야 기록된다.
+        interview: interview ? "희망" : "",
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -138,5 +152,9 @@ export async function submitFeedback(
     };
   }
 
-  return { status: "success", subscribed: contact.length > 0 };
+  return {
+    status: "success",
+    subscribed: contact.length > 0,
+    interviewRequested: interview,
+  };
 }
