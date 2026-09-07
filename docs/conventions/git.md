@@ -15,10 +15,10 @@
 
 | 구분       | 사용                           | 예                            |
 | ---------- | ------------------------------ | ----------------------------- |
-| `feature`  | 기능 추가·변경                 | `feature/demo-split-phase`    |
+| `feature`  | 기능 추가·변경                 | `feature/chat-rate-limit`     |
 | `bugfix`   | 버그 수정                      | `bugfix/demo-resume-state`    |
 | `hotfix`   | 바로 반영해야 하는 긴급 수정   | `hotfix/security-patch`       |
-| `refactor` | 동작 변화 없는 코드 구조 개선  | `refactor/extract-llm-client` |
+| `refactor` | 동작 변화 없는 코드 구조 개선  | `refactor/extract-chat-proxy` |
 | `release`  | 릴리스 준비                    | `release/v1.2.0`              |
 | `chore`    | 의존성·설정·빌드·문서 등 그 외 | `chore/update-dependencies`   |
 
@@ -149,12 +149,12 @@ docs: README에 로컬 개발 환경 구성 방법 추가
 **`refactor` — 구조 개선**
 
 ```
-refactor: Route Handler의 LLM 호출 코드를 lib으로 분리
+refactor: Route Handler의 외부 호출 코드를 lib으로 분리
 
-두 엔드포인트가 SDK를 각각 호출해 공급자 판단 로직이 나뉘어 있었다.
+Route Handler가 외부 서버를 직접 호출해 검증과 전송 책임이 섞여 있었다.
 
-- 공급자 결정과 SDK 호출을 `lib/llm.ts`로 옮긴다
-- 두 Route Handler가 같은 함수를 호출하도록 정리한다
+- 주소 정규화와 전송을 `lib/chat/proxy.ts`로 옮긴다
+- Route Handler는 본문을 읽고 검증한 뒤 그 함수를 부르게 한다
 ```
 
 **`chore` — 의존성·설정·빌드** (항목별 이유를 하위 항목으로 붙인 예)
