@@ -63,8 +63,7 @@ export function DemoFlow() {
   }, [ready, state.phase]);
 
   // 중간에 그만둘 때도 소감으로 잇는다 — 아무 진행 없이 닫은 방문만 랜딩으로.
-  const exit = () =>
-    router.push(isResumable(state) ? FEEDBACK_TARGET : "/");
+  const exit = () => router.push(isResumable(state) ? FEEDBACK_TARGET : "/");
 
   // TodayPhase의 슬라이드업 타이머 effect가 의존하는 콜백 — 렌더마다 새로
   // 만들어지면 타이머가 계속 리셋되므로 identity를 고정한다.
@@ -148,7 +147,13 @@ export function DemoFlow() {
               task_count: tasks.length,
               has_first_step: !!firstStep,
             });
-            dispatch({ type: "splitConfirmed", cardId, tasks, firstStep, answers });
+            dispatch({
+              type: "splitConfirmed",
+              cardId,
+              tasks,
+              firstStep,
+              answers,
+            });
           }}
           onResplitUsed={(cardId) => dispatch({ type: "resplitUsed", cardId })}
         />
@@ -156,11 +161,15 @@ export function DemoFlow() {
         <TodayPhase
           cards={state.cards}
           slideupShown={state.slideupShown}
-          onToggleFirstStep={(cardId) => dispatch({ type: "toggleFirstStep", cardId })}
+          onToggleFirstStep={(cardId) =>
+            dispatch({ type: "toggleFirstStep", cardId })
+          }
           onToggleSubtask={(cardId, subtaskId) =>
             dispatch({ type: "toggleSubtask", cardId, subtaskId })
           }
-          onToggleCardDone={(cardId) => dispatch({ type: "toggleCardDone", cardId })}
+          onToggleCardDone={(cardId) =>
+            dispatch({ type: "toggleCardDone", cardId })
+          }
           onSplitCard={(cardId) => dispatch({ type: "startSplit", cardId })}
           onSlideupShown={notifySlideupShown}
           onRestart={() => dispatch({ type: "reset" })}
@@ -221,7 +230,9 @@ function ResumeChoice({
         <br />
         처음부터 할까요?
       </p>
-      <p className="text-center text-[14px] text-sys-label-neutral">{summary}</p>
+      <p className="text-center text-[14px] text-sys-label-neutral">
+        {summary}
+      </p>
       <div className="flex w-full flex-col gap-2 pt-2">
         <button
           type="button"

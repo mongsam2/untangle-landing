@@ -62,8 +62,10 @@ export function RegisterForm() {
   // 인터뷰 의향 체크박스도 controlled — 비제어면 오류 왕복에서 체크가 풀린다.
   const [interview, setInterview] = useState<boolean>(false);
   const showReason = rating !== null && rating <= 3;
-  const ratingError = state.status === "error" ? state.errors?.rating : undefined;
-  const contactError = state.status === "error" ? state.errors?.contact : undefined;
+  const ratingError =
+    state.status === "error" ? state.errors?.rating : undefined;
+  const contactError =
+    state.status === "error" ? state.errors?.contact : undefined;
 
   // 소감 제출 성공 시 한 번만 — 평점·연락처 유무만 남긴다(자유 의견 원문 제외).
   // 같은 익명 distinct_id에 붙어 "퍼널 깊이 × 만족도" 상관을 볼 수 있다.
@@ -87,14 +89,15 @@ export function RegisterForm() {
           <Icon name="check" size={28} strokeWidth={2.5} />
         </span>
         <h2 className="text-[22px] font-bold tracking-[-0.3px] text-sys-label-strong">
-          {state.subscribed ? "소감과 사전 신청, 잘 받았어요" : "소감을 보냈어요"}
+          {state.subscribed
+            ? "소감과 사전 신청, 잘 받았어요"
+            : "소감을 보냈어요"}
         </h2>
         <p className="text-[15px] leading-[1.6] text-sys-label-neutral">
           {state.interviewRequested ? (
             <>
               고마워요! 남겨주신 연락처로 인터뷰 일정을
-              <br />
-              곧 여쭤보고, 출시 소식도 가장 먼저 알려드릴게요.
+              <br />곧 여쭤보고, 출시 소식도 가장 먼저 알려드릴게요.
             </>
           ) : state.subscribed ? (
             <>
@@ -176,7 +179,11 @@ export function RegisterForm() {
           </p>
         )}
         {ratingError && (
-          <span id="rating-error" role="alert" className="text-[13px] text-red-500">
+          <span
+            id="rating-error"
+            role="alert"
+            className="text-[13px] text-red-500"
+          >
             {ratingError}
           </span>
         )}
@@ -273,7 +280,11 @@ export function RegisterForm() {
           }`}
         />
         {contactError && (
-          <span id="contact-error" role="alert" className="text-[13px] text-red-500">
+          <span
+            id="contact-error"
+            role="alert"
+            className="text-[13px] text-red-500"
+          >
             {contactError}
           </span>
         )}

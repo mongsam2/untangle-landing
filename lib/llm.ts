@@ -19,7 +19,8 @@ export function resolveProvider(
 
   const env = process.env.LLM_PROVIDER?.trim().toLowerCase();
   const pinned =
-    requested ?? (env === "claude" || env === "gpt" ? (env as Provider) : undefined);
+    requested ??
+    (env === "claude" || env === "gpt" ? (env as Provider) : undefined);
 
   if (pinned === "claude") {
     return hasClaude

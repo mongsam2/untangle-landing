@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import type { ComponentProps, MouseEvent } from "react";
-import { track, type AnalyticsEvent, type AnalyticsProps } from "@/lib/analytics";
+import {
+  track,
+  type AnalyticsEvent,
+  type AnalyticsProps,
+} from "@/lib/analytics";
 
 /**
  * next/link 위에 클릭 이벤트 기록을 얹은 링크. 클라이언트 전환은 페이지를
@@ -16,7 +20,12 @@ type Props = ComponentProps<typeof Link> & {
   eventProps?: AnalyticsProps;
 };
 
-export function TrackedLink({ event, eventProps, onClick, ...linkProps }: Props) {
+export function TrackedLink({
+  event,
+  eventProps,
+  onClick,
+  ...linkProps
+}: Props) {
   return (
     <Link
       {...linkProps}

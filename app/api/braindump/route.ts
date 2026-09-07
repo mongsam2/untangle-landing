@@ -178,7 +178,9 @@ async function callLLM(
       output_config: { format: { type: "json_schema", schema } },
     });
     if (message.stop_reason === "refusal") {
-      throw new Error("요청을 처리할 수 없어요. 다른 내용으로 다시 시도해 주세요.");
+      throw new Error(
+        "요청을 처리할 수 없어요. 다른 내용으로 다시 시도해 주세요.",
+      );
     }
     text = firstText(message);
   }
@@ -195,7 +197,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     body = (await request.json()) as BraindumpRequest;
   } catch {
-    return Response.json({ error: "요청 형식이 올바르지 않아요." }, { status: 400 });
+    return Response.json(
+      { error: "요청 형식이 올바르지 않아요." },
+      { status: 400 },
+    );
   }
 
   const resolved = resolveProvider(asRequestedProvider(body?.provider));
@@ -213,7 +218,9 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (braindump.length > MAX_BRAINDUMP_LENGTH) {
     return Response.json(
-      { error: "한 번에 담기엔 조금 길어요. 2,000자 안으로 나눠서 적어 주세요." },
+      {
+        error: "한 번에 담기엔 조금 길어요. 2,000자 안으로 나눠서 적어 주세요.",
+      },
       { status: 400 },
     );
   }
@@ -266,7 +273,8 @@ export async function POST(request: Request): Promise<Response> {
         { status: 429 },
       );
     }
-    const message = error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.";
+    const message =
+      error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

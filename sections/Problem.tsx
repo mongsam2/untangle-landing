@@ -18,7 +18,9 @@ export function Problem() {
       </p>
 
       <p className="whitespace-pre-line text-[16px] font-semibold leading-[1.6] text-sys-label-strong">
-        {"부족한 건 ‘적는 도구’가 아니라, \n적은 게 시작으로 이어지는 작은 한 걸음이에요."}
+        {
+          "부족한 건 ‘적는 도구’가 아니라, \n적은 게 시작으로 이어지는 작은 한 걸음이에요."
+        }
       </p>
     </section>
   );

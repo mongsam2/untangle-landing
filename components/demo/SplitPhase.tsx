@@ -63,7 +63,12 @@ export function SplitPhase({
   onSkip: () => void;
   /** 패널의 "지금은 넘어가기" — 확정 없이 Today로. */
   onLeave: () => void;
-  onConfirm: (cardId: string, tasks: Task[], firstStep: Task, answers: Answer[]) => void;
+  onConfirm: (
+    cardId: string,
+    tasks: Task[],
+    firstStep: Task,
+    answers: Answer[],
+  ) => void;
   /** 재생성 1회 소비 — 확정과 무관하게 즉시 카드에 누적한다. */
   onResplitUsed: (cardId: string) => void;
 }) {
@@ -147,7 +152,11 @@ function DemoSplitPanel({
   braindump: string;
   card: DemoCard;
   onLeave: () => void;
-  onConfirm: (result: { tasks: Task[]; firstStep: Task; answers: Answer[] }) => void;
+  onConfirm: (result: {
+    tasks: Task[];
+    firstStep: Task;
+    answers: Answer[];
+  }) => void;
   onResplitUsed: () => void;
 }) {
   const flow = useSplitFlow({
@@ -237,7 +246,9 @@ function DemoSplitPanel({
                   <div
                     key={task.id}
                     className={`flex items-center gap-2.5 rounded-[14px] border bg-sys-bg px-[14px] py-[11px] transition-colors ${
-                      included ? "border-sys-primary-light" : "border-sys-line-strong"
+                      included
+                        ? "border-sys-primary-light"
+                        : "border-sys-line-strong"
                     }`}
                   >
                     {/* 담기 토글 — Today의 완료 체크박스와 다른 형태 (03 §3.2) */}
@@ -252,7 +263,9 @@ function DemoSplitPanel({
                           : "border-sys-line bg-sys-bg font-semibold text-sys-label-neutral"
                       }`}
                     >
-                      {included && <Icon name="check" size={11} strokeWidth={3} />}
+                      {included && (
+                        <Icon name="check" size={11} strokeWidth={3} />
+                      )}
                       {included ? "담김" : "담기"}
                     </button>
 

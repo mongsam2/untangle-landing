@@ -5,7 +5,11 @@ import { ChatBubble } from "@/components/split/ChatBubble";
 import { OptionChips } from "@/components/split/OptionChips";
 import { ChatInput } from "@/components/demo/ChatInput";
 import { WaitingIndicator } from "@/components/demo/WaitingIndicator";
-import type { BraindumpRequest, BraindumpResponse, Candidate } from "@/components/demo/types";
+import type {
+  BraindumpRequest,
+  BraindumpResponse,
+  Candidate,
+} from "@/components/demo/types";
 import { track } from "@/lib/analytics";
 
 /**
@@ -49,7 +53,9 @@ export function BraindumpPhase({
   initialText: string;
   onCandidates: (braindump: string, candidates: Candidate[]) => void;
 }) {
-  const [log, setLog] = useState<LogItem[]>([{ id: 0, role: "ai", text: WELCOME }]);
+  const [log, setLog] = useState<LogItem[]>([
+    { id: 0, role: "ai", text: WELCOME },
+  ]);
   const [input, setInput] = useState(initialText);
   const [examples, setExamples] = useState<string[]>(EXAMPLES);
   const [loading, setLoading] = useState(false);
@@ -68,7 +74,10 @@ export function BraindumpPhase({
     setLog((prev) => [...prev, { id: logCounter.current++, role: "ai", text }]);
   };
   const appendUser = (text: string) =>
-    setLog((prev) => [...prev, { id: logCounter.current++, role: "user", text }]);
+    setLog((prev) => [
+      ...prev,
+      { id: logCounter.current++, role: "user", text },
+    ]);
 
   async function runExtract(braindump: string) {
     setLoading(true);
@@ -146,7 +155,10 @@ export function BraindumpPhase({
 
           {!loading && examples.length > 0 && (
             <div className="pt-0.5">
-              <OptionChips options={examples} onPick={(text) => setInput(text)} />
+              <OptionChips
+                options={examples}
+                onPick={(text) => setInput(text)}
+              />
             </div>
           )}
 

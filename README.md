@@ -23,7 +23,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 `/register`(체험 소감) 폼 제출은 서버 액션(`app/register/actions.ts`)을 거쳐 Google Apps
 Script 웹 앱으로 전달되고, 지정한 스프레드시트에
 `제출일시 · 만족도(점수) · 만족도 · 아쉬운 이유 · 자유 의견 · 사전 신청 연락처 · 인터뷰 참여 의향`
-한 줄이 추가됩니다. 만족도는 1~5점이며, 아쉬운 이유는 1~3점일 때만 채워집니다.
+한 줄이 추가됩니다. 만족도는 1~~5점이며, 아쉬운 이유는 1~~3점일 때만 채워집니다.
 자유 의견 · 사전 신청 연락처 · 인터뷰 참여 의향은 언제나 선택이라 비어 있을 수 있습니다.
 
 > ### ⚠️ 배포 전에 반드시 해야 하는 일
@@ -47,7 +47,7 @@ Script 웹 앱으로 전달되고, 지정한 스프레드시트에
 1행에 다음 컬럼을 순서대로 입력합니다.
 
 | 제출일시 | 만족도(점수) | 만족도 | 아쉬운 이유 | 자유 의견 | 사전 신청 연락처 | 인터뷰 참여 의향 |
-| --- | --- | --- | --- | --- | --- | --- |
+| -------- | ------------ | ------ | ----------- | --------- | ---------------- | ---------------- |
 
 > **사전 신청 연락처** 는 소감 폼에서 함께 받는 선택 항목이며, 이메일과 휴대폰 번호를 모두
 > 받습니다. **인터뷰 참여 의향** 은 체크한 사람만 `희망` 이 들어오고 나머지는 빈 칸입니다.
@@ -64,25 +64,36 @@ Script 웹 앱으로 전달되고, 지정한 스프레드시트에
    > 아래 코드는 못 찾으면 첫 번째 탭으로 넘어가므로 이름이 무엇이든 동작합니다.
 
    ```javascript
-   const TOKEN = 'PUT_A_LONG_RANDOM_STRING_HERE';
-   const SHEET_NAME = '시트1';
+   const TOKEN = "PUT_A_LONG_RANDOM_STRING_HERE";
+   const SHEET_NAME = "시트1";
 
    function doPost(e) {
      try {
        const body = JSON.parse(e.postData.contents);
-       if (body.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
+       if (body.token !== TOKEN)
+         return json({ ok: false, error: "unauthorized" });
        const ss = SpreadsheetApp.getActiveSpreadsheet();
        // 이름이 어긋나도 죽지 않게 — 못 찾으면 첫 번째 탭에 쓴다.
        const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
        // 헤더 행과 순서가 1:1로 맞아야 한다. 항목이 늘면 여기 맨 뒤에 덧붙인다.
-       sheet.appendRow([new Date(), body.rating || '', body.ratingLabel || '', body.reason || '', body.comment || '', body.contact || '', body.interview || '']);
+       sheet.appendRow([
+         new Date(),
+         body.rating || "",
+         body.ratingLabel || "",
+         body.reason || "",
+         body.comment || "",
+         body.contact || "",
+         body.interview || "",
+       ]);
        return json({ ok: true });
      } catch (err) {
        return json({ ok: false, error: String(err) });
      }
    }
    function json(obj) {
-     return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+     return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
+       ContentService.MimeType.JSON,
+     );
    }
    ```
 
