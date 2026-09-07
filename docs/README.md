@@ -16,6 +16,18 @@
 | `sdlc/`        | 제품 의도, 설계 계약과 승인된 구현 순서                 |
 | `specs/`       | 코드와 이슈만으로 설명하기 어려운 핵심 결정과 상세 설계 |
 
+## 규약 문서와 읽는 시점
+
+`AGENTS.md`는 아래 네 문서를 상황별로 가리킨다. Claude Code를 쓰면 같은 이름의 스킬이
+그 상황에서 문서를 불러오지만, 스킬 없이도 이 표를 보고 같은 문서에 도달할 수 있다.
+
+| 문서                                                           | 읽는 시점                                                        |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`conventions/architecture.md`](conventions/architecture.md)   | 파일·기능을 만들거나 옮길 때, 진입점과 클라이언트 경계를 정할 때 |
+| [`conventions/typescript.md`](conventions/typescript.md)       | `.ts`·`.tsx` 내용을 쓰거나 고칠 때                               |
+| [`conventions/git.md`](conventions/git.md)                     | 브랜치·커밋·PR·이슈                                              |
+| [`conventions/documentation.md`](conventions/documentation.md) | 문서를 만들거나 고치거나 지울 때                                 |
+
 ## 문서를 둘 위치
 
 여러 작업에서 반복해서 적용할 절차나 판단 기준은 `conventions/`에 둔다.
