@@ -8,10 +8,7 @@ const CARDS = [
 
 export function Differentiation() {
   return (
-    <section
-      data-track-section="differentiation"
-      className="flex flex-col gap-6 bg-sys-bg px-6 py-[52px]"
-    >
+    <section className="flex flex-col gap-6 bg-sys-bg px-6 py-[52px]">
       <AccentRule />
 
       <h2 className="text-[24px] font-bold leading-[1.34] text-sys-label-strong">

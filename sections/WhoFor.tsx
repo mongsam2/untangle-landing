@@ -20,10 +20,7 @@ const STATS = [
 
 export function WhoFor() {
   return (
-    <section
-      data-track-section="whofor"
-      className="flex flex-col gap-[18px] bg-sys-bg-gray px-6 py-[52px]"
-    >
+    <section className="flex flex-col gap-[18px] bg-sys-bg-gray px-6 py-[52px]">
       <AccentRule />
 
       <h2 className="whitespace-pre-line text-[23px] font-bold leading-[1.38] tracking-[-0.3px] text-sys-label-strong">

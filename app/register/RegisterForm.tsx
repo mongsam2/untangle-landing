@@ -1,11 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { submitFeedback } from "@/app/register/actions";
 import { initialFeedbackState } from "@/app/register/feedback-state";
-import { track } from "@/lib/analytics";
 
 /**
  * Interactive part of the experience-feedback screen (the `/register` route,
@@ -66,21 +65,6 @@ export function RegisterForm() {
     state.status === "error" ? state.errors?.rating : undefined;
   const contactError =
     state.status === "error" ? state.errors?.contact : undefined;
-
-  // 소감 제출 성공 시 한 번만 — 평점·연락처 유무만 남긴다(자유 의견 원문 제외).
-  // 같은 익명 distinct_id에 붙어 "퍼널 깊이 × 만족도" 상관을 볼 수 있다.
-  const feedbackLogged = useRef(false);
-  useEffect(() => {
-    if (state.status === "success" && !feedbackLogged.current) {
-      feedbackLogged.current = true;
-      track("feedback_submitted", {
-        rating: rating ?? undefined,
-        has_contact: contact.trim().length > 0,
-        subscribed: !!state.subscribed,
-        interview_opted_in: !!state.interviewRequested,
-      });
-    }
-  }, [state, rating, contact]);
 
   if (state.status === "success") {
     return (

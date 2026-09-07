@@ -4,10 +4,7 @@ import { CONTACT_EMAIL } from "@/lib/site";
 
 export function FinalCta() {
   return (
-    <section
-      data-track-section="finalcta"
-      className="flex flex-col items-center gap-[14px] bg-sys-bg px-6 pt-[50px] pb-[58px]"
-    >
+    <section className="flex flex-col items-center gap-[14px] bg-sys-bg px-6 pt-[50px] pb-[58px]">
       {/* 스크롤 마무리도 체험으로 닫는다 — 소감 요청은 체험 이후에만 (실사용자
           피드백: 체험 전 소감 노출이 "왜 있지?" 이탈을 만들었다). */}
       <h2 className="whitespace-pre-line text-center text-[23px] font-bold leading-[1.36] tracking-[-0.3px] text-sys-label-strong">
@@ -19,9 +16,7 @@ export function FinalCta() {
       </p>
 
       <div className="w-full pt-2.5">
-        <CtaButton
-          tracking={{ event: "cta_clicked", props: { location: "finalcta" } }}
-        />
+        <CtaButton />
       </div>
 
       {/* 사전 신청으로 연락처를 받는 이상 두 링크는 실제로 닿아야 한다 —

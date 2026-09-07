@@ -2,10 +2,7 @@ import { CtaButton } from "@/components/CtaButton";
 
 export function Hero() {
   return (
-    <section
-      data-track-section="hero"
-      className="flex flex-col gap-5 bg-sys-bg px-6 pt-[26px] pb-11"
-    >
+    <section className="flex flex-col gap-5 bg-sys-bg px-6 pt-[26px] pb-11">
       <div className="flex w-fit items-center gap-[7px] rounded-full bg-sys-primary-lighter px-[13px] py-[7px]">
         <span className="h-[7px] w-[7px] rounded-full bg-sys-primary" />
         <span className="text-[12.5px] font-semibold text-sys-primary-dark">
@@ -22,13 +19,9 @@ export function Hero() {
         행동으로 쪼개봐요.
       </p>
 
-      {/* Above-the-fold 데모 진입 CTA (01-demo-shell.md §3.2 — 시간 약속 카피 금지) */}
+      {/* Above-the-fold 데모 진입 CTA — 시간을 약속하는 카피는 쓰지 않는다. */}
       <div className="flex flex-col gap-2 pt-1.5">
-        <CtaButton
-          label="지금 바로 체험하기"
-          href="/demo"
-          tracking={{ event: "cta_clicked", props: { location: "hero" } }}
-        />
+        <CtaButton label="지금 바로 체험하기" href="/demo" />
         <p className="text-center text-[12.5px] text-sys-label-alt">
           가입 없음 · 머릿속을 쏟아내는 것부터 시작해요
         </p>
