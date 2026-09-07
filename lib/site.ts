@@ -9,4 +9,4 @@
 export const CONTACT_EMAIL = "swmidiot@gmail.com";
 
 /** 개인정보 처리방침 시행일 — 내용을 고칠 때마다 함께 갱신한다. */
-export const PRIVACY_EFFECTIVE_DATE = "2026년 7월 23일";
+export const PRIVACY_EFFECTIVE_DATE = "2026년 9월 7일";
