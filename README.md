@@ -1,46 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Untangle 랜딩
 
-## Getting Started
+Next.js App Router로 만든 Untangle 랜딩과 `/demo` 체험 화면입니다. 데모의 AI 응답은
+별도 저장소인 `untangle-ai` 서버가 만들고, 이 저장소의 Next.js 서버는 브라우저 요청을
+그 서버로 전달하는 얇은 경계만 담당합니다.
 
-First, run the development server:
+## 로컬에서 실행하기
+
+### 1. AI 서버를 먼저 띄웁니다
+
+`/demo`의 대화는 `POST /api/chat` → `{UNTANGLE_AI_BASE_URL}/v1/chat` 으로 이어지므로,
+AI 서버가 떠 있지 않으면 데모가 답을 받지 못합니다. `untangle-ai` 저장소의 실행 안내를
+따라 서버를 먼저 시작하세요.
+
+### 2. 환경 변수를 채웁니다
+
+`.env.example`을 `.env.local`로 복사한 뒤 값을 넣습니다.
+
+| 변수                   | 설명                                                           |
+| ---------------------- | -------------------------------------------------------------- |
+| `UNTANGLE_AI_BASE_URL` | AI 서버 주소. 비워두면 `http://127.0.0.1:8000`을 사용합니다.   |
+| `SHEETS_WEBHOOK_URL`   | 체험 소감을 저장할 Apps Script 웹 앱 URL (아래 연동 절차 참고) |
+| `SHEETS_WEBHOOK_TOKEN` | Apps Script 코드의 `TOKEN`과 같은 값                           |
+
+`UNTANGLE_AI_BASE_URL`은 `NEXT_PUBLIC_` 접두사가 없는 서버 전용 값입니다. 브라우저는 AI
+서버 주소와 공급자 설정을 알지 못합니다.
+
+### 3. 랜딩 개발 서버를 띄웁니다
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000)을 엽니다. 개발 서버는 `localhost`로
+접속해야 합니다. `127.0.0.1`로 열면 Next.js가 개발 리소스 요청을 교차 출처로 보고
+차단해 화면이 하이드레이션되지 않습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 검증 명령
+
+```bash
+bun run format
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+```
+
+## 데이터가 저장되는 위치
+
+- **대화·할 일·완료 상태** — 이용자 브라우저의 `localStorage` 키 `untangle:demo:v2`에만
+  남습니다. Next.js 서버는 대화와 할 일을 저장하지 않고 AI 서버로 전달만 합니다.
+  완료 여부는 브라우저 전용 정보라 AI 요청에 넣지 않습니다.
+- **체험 소감** — `/register` 폼 제출만 아래 Google 스프레드시트로 전송됩니다.
+
+데모 안에는 저장된 내용을 지우는 버튼이 없습니다. 브라우저 설정에서 이 사이트의 데이터를
+지우면 대화와 할 일이 함께 사라집니다.
 
 ## 체험 소감 저장 연동 (Google Sheets)
 
 `/register`(체험 소감) 폼 제출은 서버 액션(`app/register/actions.ts`)을 거쳐 Google Apps
 Script 웹 앱으로 전달되고, 지정한 스프레드시트에
 `제출일시 · 만족도(점수) · 만족도 · 아쉬운 이유 · 자유 의견 · 사전 신청 연락처 · 인터뷰 참여 의향`
-한 줄이 추가됩니다. 만족도는 1~~5점이며, 아쉬운 이유는 1~~3점일 때만 채워집니다.
+한 줄이 추가됩니다. 만족도는 1점부터 5점까지이며, 아쉬운 이유는 3점 이하일 때만 채워집니다.
 자유 의견 · 사전 신청 연락처 · 인터뷰 참여 의향은 언제나 선택이라 비어 있을 수 있습니다.
 
-> ### ⚠️ 배포 전에 반드시 해야 하는 일
->
-> 소감 폼에 **사용자 인터뷰 참여 의향** 체크박스가 추가되었습니다. 서버 액션은 이미
-> `interview` 필드를 함께 보내고 있지만, **Apps Script가 그 필드를 받아 적지 않으면 값은
-> 조용히 버려집니다.** 스크립트가 `{ ok: true }` 를 돌려주므로 서버 액션은 정상 처리로
-> 판단하고, 화면에는 "남겨주신 연락처로 인터뷰 일정을 곧 여쭤보고..." 가 그대로 뜹니다.
->
-> 1. 시트 1행 맨 끝에 **`인터뷰 참여 의향`** 컬럼을 추가합니다. (아래 [1단계](#1-시트에-헤더-행-만들기))
-> 2. Apps Script의 `appendRow` 마지막에 **`body.interview || ''`** 를 추가합니다. (아래 [2단계](#2-apps-script-웹-앱-배포))
-> 3. **배포 → 배포 관리 → (연필) → 버전: 새 버전 → 배포** 로 다시 배포합니다. 코드만 저장하면 반영되지 않습니다.
-> 4. `/register` 에서 인터뷰에 체크하고 연락처를 넣어 제출해 보고, 시트 마지막 칸에 `희망` 이 들어오는지 확인합니다.
->
-> 연락처는 **정식 출시 안내와 인터뷰 요청 연락을 마친 뒤 즉시 파기**하기로 되어
-> 있습니다([개인정보 처리방침](app/privacy/page.tsx) 3절). 시트에 쌓인 연락처도 쓰임을 다한
-> 뒤 직접 지워 주세요.
+연락처는 정식 출시 안내와 인터뷰 요청 연락을 마친 뒤 즉시 파기하기로 되어 있습니다
+([개인정보 처리방침](app/privacy/page.tsx) 3절). 시트에 쌓인 연락처도 쓰임을 다한 뒤
+직접 지워 주세요.
 
 ### 1. 시트에 헤더 행 만들기
 
