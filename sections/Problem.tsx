@@ -2,10 +2,7 @@ import { AccentRule } from "@/components/AccentRule";
 
 export function Problem() {
   return (
-    <section
-      data-track-section="problem"
-      className="flex flex-col gap-[18px] bg-sys-bg-gray px-6 py-12"
-    >
+    <section className="flex flex-col gap-[18px] bg-sys-bg-gray px-6 py-12">
       <AccentRule />
 
       <h2 className="whitespace-pre-line text-[25px] font-bold leading-[1.34] tracking-[-0.4px] text-sys-label-strong">

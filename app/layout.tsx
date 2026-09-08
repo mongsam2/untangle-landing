@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 
 export const metadata: Metadata = {
   title: "Untangle — 해야 할 일은 아는데, 시작이 안 될 때",
@@ -26,9 +25,7 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
-      <body className="min-h-full">
-        <PostHogProvider>{children}</PostHogProvider>
-      </body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }
