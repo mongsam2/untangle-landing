@@ -50,6 +50,7 @@ Vercel → 프로젝트 → **Settings → Environment Variables**에서 위 두
 PostHog 좌측 **Product analytics → New insight → Funnel**에서:
 
 ### 퍼널 A — "랜딩이 데모까지 이끄는가" (목표 1)
+
 1. `$pageview` (필터: Current URL = 랜딩 `/`)
 2. `section_viewed` (필터: `section` = `finalcta`) — 끝까지 읽은 비율
 3. `cta_clicked` — CTA를 누른 비율
@@ -58,6 +59,7 @@ PostHog 좌측 **Product analytics → New insight → Funnel**에서:
 → 단계별 전환/이탈률로 **어느 섹션에서 흥미를 잃는지, CTA가 얼마나 눌리는지, 랜딩→데모 전환율**을 봅니다. `cta_clicked`를 `location`으로 쪼개면 hero/finalcta/header 중 어디가 효과적인지도 나옵니다.
 
 ### 퍼널 B — "데모를 어디까지 쓰고 그만두나" (목표 2)
+
 1. `demo_phase_view` (필터: `phase` = `braindump`)
 2. `demo_phase_view` (필터: `phase` = `candidates`)
 3. `demo_phase_view` (필터: `phase` = `split`)
@@ -68,22 +70,23 @@ PostHog 좌측 **Product analytics → New insight → Funnel**에서:
 → 단계별 드롭오프로 **어느 단계에서 이탈하는지**를 봅니다. PostHog 퍼널의 "time to convert"로 단계별 체류시간도 나옵니다.
 
 ### 만족도 × 퍼널 깊이 상관
+
 - `feedback_submitted`를 `rating`으로 breakdown 한 Trends, 또는 퍼널 B의 마지막 단계를 `rating`으로 나눠 보면 **깊이 간 사람일수록 만족도가 높은지** 확인할 수 있습니다.
 
 ## 6. 참고: 이벤트 사전 (Phase 1)
 
-| 이벤트 | 언제 | properties(콘텐츠 없음) |
-|---|---|---|
-| `$pageview` | 라우트 전환마다 | `$current_url` |
-| `section_viewed` | 랜딩 섹션이 화면에 들어올 때(1회) | `section` (hero/problem/differentiation/whofor/finalcta) |
-| `cta_clicked` | 랜딩 데모 CTA 클릭 | `location` (hero/finalcta/header) |
-| `demo_phase_view` | 데모 단계 진입/전환 | `phase` (braindump/candidates/split/today) |
-| `braindump_submitted` | 브레인덤프 전송 | `length` (글자 수) |
-| `candidates_confirmed` | 후보 확정 | `count` |
-| `split_confirmed` | 쪼개기 계획 확정 | `task_count`, `has_first_step` |
-| `first_check_success` | 오늘 화면 첫 체크 | — |
-| `demo_cta_clicked` | 데모 → 소감 CTA 클릭 | `surface` (all_done/slideup/minibar) |
-| `feedback_submitted` | 소감 제출 성공 | `rating`, `has_contact`, `subscribed` |
+| 이벤트                 | 언제                              | properties(콘텐츠 없음)                                  |
+| ---------------------- | --------------------------------- | -------------------------------------------------------- |
+| `$pageview`            | 라우트 전환마다                   | `$current_url`                                           |
+| `section_viewed`       | 랜딩 섹션이 화면에 들어올 때(1회) | `section` (hero/problem/differentiation/whofor/finalcta) |
+| `cta_clicked`          | 랜딩 데모 CTA 클릭                | `location` (hero/finalcta/header)                        |
+| `demo_phase_view`      | 데모 단계 진입/전환               | `phase` (braindump/candidates/split/today)               |
+| `braindump_submitted`  | 브레인덤프 전송                   | `length` (글자 수)                                       |
+| `candidates_confirmed` | 후보 확정                         | `count`                                                  |
+| `split_confirmed`      | 쪼개기 계획 확정                  | `task_count`, `has_first_step`                           |
+| `first_check_success`  | 오늘 화면 첫 체크                 | —                                                        |
+| `demo_cta_clicked`     | 데모 → 소감 CTA 클릭              | `surface` (all_done/slideup/minibar)                     |
+| `feedback_submitted`   | 소감 제출 성공                    | `rating`, `has_contact`, `subscribed`                    |
 
 ## 7. 개인정보 관련 (반영 완료)
 

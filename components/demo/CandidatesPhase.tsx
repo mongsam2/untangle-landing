@@ -19,7 +19,8 @@ const GUIDE = "이 중에 오늘 반드시 끝내고 싶은 일들이 있나요?
  * 나왔다는 것 — 없으면 "내가 적은 일은 어디 갔지?"로 읽힌다, (2) 상한이 3개라는
  * 것 — 4번째를 눌러서야 알게 되면 "왜 안 눌리지?"로 당황한다.
  */
-const PICK_HINT = "쏟아낸 이야기에서 찾은 일들이에요 · 최대 3개까지 고를 수 있어요";
+const PICK_HINT =
+  "쏟아낸 이야기에서 찾은 일들이에요 · 최대 3개까지 고를 수 있어요";
 const CAP_NOTICE = "한 3개만 골라볼까요? 고른 일은 오늘 꼭 끝내봐요.";
 const MAX_SELECTED = 3;
 /** 카드 승격 연출 길이 — 짧은 CSS 전환 수준으로 절제 (02 §3.2). */
@@ -129,7 +130,10 @@ export function CandidatesPhase({
       {/* 하단 액션 바 — 확정(주 행동 1개) + 다시 쏟아내기 보조 동선 */}
       <div className="flex flex-col gap-2.5 border-t border-sys-line px-5 py-3">
         {capNotice && (
-          <p aria-live="polite" className="text-center text-[12.5px] text-sys-label-neutral">
+          <p
+            aria-live="polite"
+            className="text-center text-[12.5px] text-sys-label-neutral"
+          >
             {CAP_NOTICE}
           </p>
         )}

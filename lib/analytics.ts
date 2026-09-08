@@ -23,7 +23,10 @@ export type AnalyticsEvent =
   | "demo_cta_clicked" // 데모 → 소감 CTA(표면별)
   | "feedback_submitted"; // 소감 제출(평점·연락처 유무만)
 
-export type AnalyticsProps = Record<string, string | number | boolean | undefined>;
+export type AnalyticsProps = Record<
+  string,
+  string | number | boolean | undefined
+>;
 
 const KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 // 미국 호스트 고정 — 필요 시 .env.local 에서 override.

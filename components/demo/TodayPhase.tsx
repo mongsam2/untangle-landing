@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { CtaButton } from "@/components/CtaButton";
-import { hasAnyCheck, initialDemoState, isCardDone } from "@/components/demo/state";
+import {
+  hasAnyCheck,
+  initialDemoState,
+  isCardDone,
+} from "@/components/demo/state";
 import type { DemoCard } from "@/components/demo/types";
 import { MAX_RESPLITS } from "@/components/split/useSplitFlow";
 import { track } from "@/lib/analytics";
@@ -99,14 +103,19 @@ export function TodayPhase({
                 label={CTA_LABEL}
                 href={REGISTER_HREF}
                 className="mt-4"
-                tracking={{ event: "demo_cta_clicked", props: { surface: "all_done" } }}
+                tracking={{
+                  event: "demo_cta_clicked",
+                  props: { surface: "all_done" },
+                }}
               />
             </div>
           )}
 
           {/* Header: 날짜 + 오늘 할 일 N개 — 통계·스트릭·달력 없음 (04 §3.1) */}
           <div>
-            <p className="text-[13px] font-semibold text-sys-primary-dark">{dateLabel}</p>
+            <p className="text-[13px] font-semibold text-sys-primary-dark">
+              {dateLabel}
+            </p>
             <h2 className="pt-0.5 text-[19px] font-bold leading-[1.4] text-sys-label-strong">
               오늘 할 일 {cards.length}개
             </h2>
@@ -127,7 +136,9 @@ export function TodayPhase({
           <div className="flex items-center justify-center pb-1 pt-2">
             {confirmingRestart ? (
               <div className="flex items-center gap-4">
-                <span className="text-[13px] text-sys-label-neutral">정말요?</span>
+                <span className="text-[13px] text-sys-label-neutral">
+                  정말요?
+                </span>
                 <button
                   type="button"
                   onClick={onRestart}
@@ -158,7 +169,10 @@ export function TodayPhase({
 
       {/* 하단 고정: 슬라이드업 → 축소 후엔 미니 바 상시 유지 (04 §3.4) */}
       {slideupOpen ? (
-        <SlideupCard count={cards.length} onCollapse={() => setSlideupOpen(false)} />
+        <SlideupCard
+          count={cards.length}
+          onCollapse={() => setSlideupOpen(false)}
+        />
       ) : slideupShown ? (
         <MiniBar />
       ) : null}
@@ -248,7 +262,10 @@ function TodayCard({
                   지금 할 첫 단계
                 </div>
                 <div className="flex items-center gap-3">
-                  <CheckBox checked={card.firstStep.done} onToggle={onFirstStep} />
+                  <CheckBox
+                    checked={card.firstStep.done}
+                    onToggle={onFirstStep}
+                  />
                   <span
                     className={`min-w-0 flex-1 text-[14.5px] font-medium leading-[1.45] ${
                       card.firstStep.done
@@ -267,7 +284,11 @@ function TodayCard({
             <ol className="flex flex-col gap-1.5">
               {card.subtasks.map((s) => (
                 <li key={s.id} className="flex items-center gap-2.5 py-0.5">
-                  <CheckBox small checked={s.done} onToggle={() => onSubtask(s.id)} />
+                  <CheckBox
+                    small
+                    checked={s.done}
+                    onToggle={() => onSubtask(s.id)}
+                  />
                   <span
                     className={`min-w-0 text-[14px] leading-[1.45] ${
                       s.done
@@ -297,18 +318,18 @@ function TodayCard({
           </div>
         )
       ) : (
-          <div className="flex flex-col border-t border-sys-line px-[14px] py-3">
-            {/* 미분해 카드 — 쪼개기 시작 */}
-            <button
-              type="button"
-              onClick={onSplit}
-              className="flex items-center gap-1.5 text-[12.5px] font-semibold text-sys-label-neutral transition-colors hover:text-sys-primary-dark"
-            >
-              <Icon name="scissors" size={13} strokeWidth={2} />
-              쪼개기
-            </button>
-          </div>
-        )}
+        <div className="flex flex-col border-t border-sys-line px-[14px] py-3">
+          {/* 미분해 카드 — 쪼개기 시작 */}
+          <button
+            type="button"
+            onClick={onSplit}
+            className="flex items-center gap-1.5 text-[12.5px] font-semibold text-sys-label-neutral transition-colors hover:text-sys-primary-dark"
+          >
+            <Icon name="scissors" size={13} strokeWidth={2} />
+            쪼개기
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -331,7 +352,9 @@ function CheckBox({
       aria-checked={checked}
       aria-label="완료 표시"
       className={`flex shrink-0 items-center justify-center border-[1.5px] transition-all duration-150 active:scale-90 ${
-        small ? "h-[18px] w-[18px] rounded-[6px]" : "h-[22px] w-[22px] rounded-[7px]"
+        small
+          ? "h-[18px] w-[18px] rounded-[6px]"
+          : "h-[22px] w-[22px] rounded-[7px]"
       } ${
         checked
           ? "border-sys-primary bg-sys-primary text-sys-on-primary"
@@ -349,7 +372,13 @@ function CheckBox({
 }
 
 /** 첫 체크 후 하단 슬라이드업 — 모달로 화면을 가로채지 않는다 (04 §3.4). */
-function SlideupCard({ count, onCollapse }: { count: number; onCollapse: () => void }) {
+function SlideupCard({
+  count,
+  onCollapse,
+}: {
+  count: number;
+  onCollapse: () => void;
+}) {
   // Two-phase mount so the card actually slides in (no global keyframes).
   const [entered, setEntered] = useState(false);
   useEffect(() => {
@@ -365,17 +394,19 @@ function SlideupCard({ count, onCollapse }: { count: number; onCollapse: () => v
     >
       {/* 체험 요약 3줄 — 자기가 만든 결과물이 소감의 재료 (04 §3.4) */}
       <div className="flex flex-col gap-2">
-        {["쏟아낸 생각", `오늘 할 일 ${count}개`, "첫 걸음 완료"].map((line, i) => (
-          <div
-            key={line}
-            className="flex items-center gap-2.5 text-[14px] leading-[1.5] text-sys-label-normal"
-          >
-            <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-sys-primary-lighter text-[11px] font-bold text-sys-primary-dark">
-              {i + 1}
-            </span>
-            {line}
-          </div>
-        ))}
+        {["쏟아낸 생각", `오늘 할 일 ${count}개`, "첫 걸음 완료"].map(
+          (line, i) => (
+            <div
+              key={line}
+              className="flex items-center gap-2.5 text-[14px] leading-[1.5] text-sys-label-normal"
+            >
+              <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-sys-primary-lighter text-[11px] font-bold text-sys-primary-dark">
+                {i + 1}
+              </span>
+              {line}
+            </div>
+          ),
+        )}
       </div>
       <CtaButton
         label={CTA_LABEL}

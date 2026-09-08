@@ -1,5 +1,10 @@
 import type { Answer, Task } from "@/components/split/types";
-import type { Candidate, DemoCard, DemoState, DemoSubtask } from "@/components/demo/types";
+import type {
+  Candidate,
+  DemoCard,
+  DemoState,
+  DemoSubtask,
+} from "@/components/demo/types";
 
 /**
  * Demo state machine + localStorage persistence (docs/features/00-overview.md §5).
@@ -74,12 +79,20 @@ function promote(candidate: Candidate, index: number): DemoCard {
  * Rebuild a card's subtasks from a confirmed plan, preserving `done` on items
  * whose title survived the re-split (03 §3.3 — 재확정 시 유지 항목의 done 보존).
  */
-function buildSubtasks(cardId: string, tasks: Task[], previous: DemoSubtask[]): DemoSubtask[] {
+function buildSubtasks(
+  cardId: string,
+  tasks: Task[],
+  previous: DemoSubtask[],
+): DemoSubtask[] {
   const remaining = [...previous];
   return tasks.slice(0, MAX_SUBTASKS).map((task, i) => {
     const keptIndex = remaining.findIndex((s) => s.title === task.title);
     const kept = keptIndex >= 0 ? remaining.splice(keptIndex, 1)[0] : null;
-    return { id: `${cardId}-${i}`, title: task.title, done: kept?.done ?? false };
+    return {
+      id: `${cardId}-${i}`,
+      title: task.title,
+      done: kept?.done ?? false,
+    };
   });
 }
 
@@ -115,7 +128,10 @@ function normalizeRestored(state: DemoState): DemoState {
           : 0,
     })),
   };
-  if ((next.phase === "split" || next.phase === "today") && next.cards.length === 0) {
+  if (
+    (next.phase === "split" || next.phase === "today") &&
+    next.cards.length === 0
+  ) {
     next.phase = next.candidates.length > 0 ? "candidates" : "braindump";
   }
   return next;
@@ -173,7 +189,10 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     case "toggleFirstStep":
       return updateCard(state, action.cardId, (card) =>
         card.firstStep
-          ? { ...card, firstStep: { ...card.firstStep, done: !card.firstStep.done } }
+          ? {
+              ...card,
+              firstStep: { ...card.firstStep, done: !card.firstStep.done },
+            }
           : card,
       );
     case "toggleSubtask":

@@ -76,7 +76,9 @@ const ADVANCE_SCHEMA: Record<string, unknown> = {
   },
 };
 
-const advanceSystem = (maxTasks: number) => `당신은 "Untangle"의 Co-Planner예요. 사용자가 '목표만 있는 큰 일'을 가져오면, 그 일을 실제로 시작할 수 있도록 작은 실행 단위로 쪼개주는 역할을 합니다.
+const advanceSystem = (
+  maxTasks: number,
+) => `당신은 "Untangle"의 Co-Planner예요. 사용자가 '목표만 있는 큰 일'을 가져오면, 그 일을 실제로 시작할 수 있도록 작은 실행 단위로 쪼개주는 역할을 합니다.
 
 # 진행 방식
 1. 답변이 2개 미만이면 아직 분해하지 마세요. status를 "need_more"로 하고, 사용자에게 꼭 맞는 서브태스크를 만드는 데 가장 도움이 되는 질문 '하나만' 던지세요.
@@ -119,9 +121,7 @@ function advanceUser(
   context: string | undefined,
   maxTasks: number,
 ): string {
-  const daily = context?.trim()
-    ? `[오늘의 맥락]\n${context.trim()}\n\n`
-    : "";
+  const daily = context?.trim() ? `[오늘의 맥락]\n${context.trim()}\n\n` : "";
   // 서버가 답변 개수를 알고 있으므로 단계를 직접 조향한다 — 최소 2질문 보장.
   const steer =
     answers.length < QUESTION_MIN && !skipRequested(answers)
@@ -181,7 +181,9 @@ async function callLLM(
       output_config: { format: { type: "json_schema", schema } },
     });
     if (message.stop_reason === "refusal") {
-      throw new Error("요청을 처리할 수 없어요. 다른 내용으로 다시 시도해 주세요.");
+      throw new Error(
+        "요청을 처리할 수 없어요. 다른 내용으로 다시 시도해 주세요.",
+      );
     }
     text = firstText(message);
   }
@@ -198,7 +200,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     body = (await request.json()) as SplitRequest;
   } catch {
-    return Response.json({ error: "요청 형식이 올바르지 않아요." }, { status: 400 });
+    return Response.json(
+      { error: "요청 형식이 올바르지 않아요." },
+      { status: 400 },
+    );
   }
 
   const resolved = resolveProvider(asRequestedProvider(body?.provider));
@@ -208,7 +213,10 @@ export async function POST(request: Request): Promise<Response> {
   const provider = resolved.provider;
 
   if (!body?.goal?.trim()) {
-    return Response.json({ error: "쪼갤 일을 먼저 입력해 주세요." }, { status: 400 });
+    return Response.json(
+      { error: "쪼갤 일을 먼저 입력해 주세요." },
+      { status: 400 },
+    );
   }
 
   const rawMax = Number(body?.maxTasks);
@@ -242,7 +250,10 @@ export async function POST(request: Request): Promise<Response> {
     if (parsed.status === "ready") {
       const result: SplitResult = {
         status: "ready",
-        message: typeof parsed.message === "string" ? parsed.message : "이렇게 쪼개봤어요.",
+        message:
+          typeof parsed.message === "string"
+            ? parsed.message
+            : "이렇게 쪼개봤어요.",
         tasks: asTasks(parsed.tasks, maxTasks),
         firstStep: asStep(parsed.firstStep),
       };
@@ -283,7 +294,8 @@ export async function POST(request: Request): Promise<Response> {
         { status: 429 },
       );
     }
-    const message = error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.";
+    const message =
+      error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

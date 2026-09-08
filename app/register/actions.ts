@@ -72,7 +72,8 @@ export async function submitFeedback(
   // 인터뷰에 응하겠다는 분에게는 연락할 방법이 있어야 한다 — 이때만 연락처가
   // 필수로 승격된다. 클라이언트에서도 안내하지만 우회될 수 있으니 서버가 최종.
   if (interview && !contact) {
-    errors.contact = "인터뷰 연락을 드리려면 이메일이나 휴대폰 번호가 필요해요.";
+    errors.contact =
+      "인터뷰 연락을 드리려면 이메일이나 휴대폰 번호가 필요해요.";
   } else if (
     contact &&
     (contact.length > CONTACT_MAX || !isValidContact(contact))

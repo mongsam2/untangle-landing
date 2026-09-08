@@ -30,7 +30,8 @@ import type {
 export const SKIP_ANSWER = "그냥 이대로 쪼개줘";
 const SOFT_GUARD_SUFFIX = " (남은 건 알아서 가정하고 이대로 쪼개주세요)";
 const IMMEDIATE_ACK = "좋아요. 몇 가지만 짧게 여쭤볼게요.";
-const REOPEN_NOTE = "저장해둔 계획이에요. 마음에 들지 않으면 다시 쪼갤 수 있어요.";
+const REOPEN_NOTE =
+  "저장해둔 계획이에요. 마음에 들지 않으면 다시 쪼갤 수 있어요.";
 /** 무엇이 달라지는지 먼저 말해준다 — 결과만 바뀌면 "뭘 다시 쪼갠 거지?"가 된다. */
 const regenNote = (cap: number) =>
   `다시 쪼개볼게요. 이번에는 최대 ${cap}단계까지 나눠서 제안해 볼게요.`;
@@ -64,7 +65,10 @@ export type UseSplitFlowArgs = {
    * 더 쪼갤 수 없고, 마음에 들지 않으면 regenerate()로 전체를 다시 만든다 —
    * 새 결과는 확정해야 카드에 반영된다 (03 §3.3).
    */
-  initialResult?: { tasks: { title: string; done: boolean }[]; firstStep: Task } | null;
+  initialResult?: {
+    tasks: { title: string; done: boolean }[];
+    firstStep: Task;
+  } | null;
   /** 브레인덤프 원문 — 데모는 항상 전달 (03 §4 필수 확장). */
   context?: string;
   /**
@@ -74,7 +78,11 @@ export type UseSplitFlowArgs = {
   initialResplitCount?: number;
   /** 재생성 1회를 소비했다 — 카드에 저장하라는 신호. */
   onResplit?: () => void;
-  onConfirm: (result: { tasks: Task[]; firstStep: Task; answers: Answer[] }) => void;
+  onConfirm: (result: {
+    tasks: Task[];
+    firstStep: Task;
+    answers: Answer[];
+  }) => void;
 };
 
 async function postSplit(body: SplitRequest): Promise<SplitResponse> {
@@ -138,14 +146,18 @@ export function useSplitFlow({
   const [resplitsUsed, setResplitsUsed] = useState(initialResplitCount ?? 0);
   // 재생성이 성공해 새 결과가 도착했을 때만 커밋할 직전 계획.
   const pendingPrevious = useRef<string[] | null>(null);
-  const maxTasks = () => TASK_CAPS[Math.min(regenCount.current, TASK_CAPS.length - 1)];
+  const maxTasks = () =>
+    TASK_CAPS[Math.min(regenCount.current, TASK_CAPS.length - 1)];
 
   const appendAi = (text: string) => {
     if (!text?.trim()) return;
     setLog((prev) => [...prev, { id: logCounter.current++, role: "ai", text }]);
   };
   const appendUser = (text: string) =>
-    setLog((prev) => [...prev, { id: logCounter.current++, role: "user", text }]);
+    setLog((prev) => [
+      ...prev,
+      { id: logCounter.current++, role: "user", text },
+    ]);
 
   const makeTasks = (list: Task[], done = false): FlowTask[] =>
     list
@@ -242,7 +254,9 @@ export function useSplitFlow({
     // 소프트 가드: 마지막(2번째) 답변에는 "남은 건 가정" 문구를 실어 보낸다 (03 §3.2-2).
     const isLast = answersRef.current.length >= QUESTION_CAP - 1;
     const sent =
-      isLast && answer !== SKIP_ANSWER ? `${answer}${SOFT_GUARD_SUFFIX}` : answer;
+      isLast && answer !== SKIP_ANSWER
+        ? `${answer}${SOFT_GUARD_SUFFIX}`
+        : answer;
     const next = [
       ...answersRef.current,
       { question: question.text, answer: sent },
@@ -282,7 +296,9 @@ export function useSplitFlow({
   function confirm() {
     if (!firstStep || selectedCount === 0 || loading) return;
     onConfirm({
-      tasks: tasks.filter((t) => selected[t.id]).map((t) => ({ title: t.title })),
+      tasks: tasks
+        .filter((t) => selected[t.id])
+        .map((t) => ({ title: t.title })),
       firstStep,
       answers: answersRef.current,
     });
