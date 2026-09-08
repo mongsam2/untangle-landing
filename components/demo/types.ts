@@ -1,58 +1,91 @@
-import type { Answer, Provider } from "@/components/split/types";
+import type { ChatSuccessResponse, Task } from "@/lib/chat/types";
 
 /**
- * Shared types for the full-flow demo (docs/features/00-overview.md §5).
- * Used by the client (components/demo/*) and the API route (app/api/braindump).
+ * 대화형 데모의 저장 스냅샷과 화면 런타임 상태를 정의한다.
+ * 서버 공개 계약에는 없는 완료·요약·탭 상태를 이 경계에만 둔다.
  */
 
-/** One extracted to-do candidate — a suggestion, not a card (원칙 3). */
-export type Candidate = { title: string; big: boolean };
+export type DemoTab = "chat" | "today";
 
-export type DemoSubtask = { id: string; title: string; done: boolean };
+export interface TaskSummary {
+  count: number;
+  titles: string[];
+}
 
-/** A confirmed TODO Card — the product's core unit (PRD §4), demo edition. */
-export type DemoCard = {
+export interface StoredMessage {
   id: string;
-  title: string;
-  big: boolean;
-  /** Completion for undivided cards; split cards derive it from subtasks. */
-  done: boolean;
-  /** Present only after the card has been split. */
-  firstStep: { title: string; done: boolean } | null;
-  /** Empty until a split plan is confirmed. 기본 ≤5, 다시 쪼개기 시 최대 10. */
-  subtasks: DemoSubtask[];
-  /** Clarify history, kept so "더 쪼개기" resumes the past conversation. */
-  splitAnswers: Answer[];
-  /**
-   * "다시 쪼개기"로 계획을 재생성한 횟수 — 카드당 MAX_RESPLITS까지. 훅의 ref만으로는
-   * 패널을 다시 열 때마다 0으로 돌아가 무제한이 되므로 카드에 실어 저장한다.
-   * 세는 것은 재생성(LLM 호출)뿐 — 저장된 계획을 열기만 하는 건 세지 않는다.
-   */
-  resplitCount: number;
-};
+  role: "user" | "assistant";
+  content: string;
+  taskSummary?: TaskSummary;
+}
 
-export type DemoPhase = "braindump" | "candidates" | "split" | "today";
+export interface StoredDemoState {
+  version: 2;
+  messages: StoredMessage[];
+  tasks: Task[];
+  completedIds: string[];
+  todayUnread: boolean;
+  historyTrimmed: boolean;
+}
 
-export type DemoState = {
-  version: 1;
-  phase: DemoPhase;
-  /** Raw braindump — always sent as `context` to split advance (03 §4). */
-  braindump: string;
-  candidates: Candidate[];
-  /** Confirmed cards only, 1~3. */
-  cards: DemoCard[];
-  /** Card being split; null while picking (split phase 첫 화면). */
-  splittingCardId: string | null;
-  /** Whether the one-shot feedback slide-up has been shown (04 §3.4). */
-  slideupShown: boolean;
-};
+export type DemoRequestState =
+  | { status: "idle"; errorMessage: null }
+  | { status: "pending"; errorMessage: null; attemptId: string }
+  | {
+      status: "retry";
+      errorMessage: string | null;
+      previousAttemptId: string | null;
+    };
 
-/** POST /api/braindump request body — single action, no `action` field. */
-export type BraindumpRequest = { provider?: Provider; braindump: string };
+export interface DemoRuntimeState extends StoredDemoState {
+  activeTab: DemoTab;
+  request: DemoRequestState;
+  hydrated: boolean;
+}
 
-/** POST /api/braindump success bodies (02-demo-braindump.md §4). */
-export type BraindumpResult =
-  | { status: "ok"; message: string; candidates: Candidate[] }
-  | { status: "retry"; message: string; examples: string[] };
-
-export type BraindumpResponse = BraindumpResult | { error: string };
+export type DemoAction =
+  | { type: "hydrate"; stored: StoredDemoState | null }
+  | {
+      type: "submitUserMessage";
+      id: string;
+      attemptId: string;
+      content: string;
+    }
+  | { type: "retryRequest"; attemptId: string }
+  | { type: "failRequest"; attemptId: string; message?: string }
+  | {
+      type: "receiveResponse";
+      id: string;
+      attemptId: string;
+      response: ChatSuccessResponse;
+    }
+  | { type: "changeTab"; tab: DemoTab }
+  | { type: "addTask"; id: string; title: string; description: string }
+  | {
+      type: "updateTask";
+      taskId: string;
+      title: string;
+      description: string;
+    }
+  | { type: "deleteTask"; taskId: string }
+  | { type: "reorderTask"; taskId: string; overTaskId: string }
+  | { type: "addSubtask"; taskId: string; id: string; title: string }
+  | {
+      type: "updateSubtask";
+      taskId: string;
+      subtaskId: string;
+      title: string;
+    }
+  | { type: "deleteSubtask"; taskId: string; subtaskId: string }
+  | {
+      type: "reorderSubtask";
+      taskId: string;
+      subtaskId: string;
+      overSubtaskId: string;
+    }
+  | { type: "toggleTaskCompletion"; taskId: string }
+  | {
+      type: "toggleSubtaskCompletion";
+      taskId: string;
+      subtaskId: string;
+    };

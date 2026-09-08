@@ -1,316 +1,886 @@
-import type { Answer, Task } from "@/components/split/types";
+import { arrayMove } from "@dnd-kit/helpers";
 import type {
-  Candidate,
-  DemoCard,
-  DemoState,
-  DemoSubtask,
+  DemoAction,
+  DemoRuntimeState,
+  StoredDemoState,
+  StoredMessage,
+  TaskSummary,
 } from "@/components/demo/types";
+import {
+  CHAT_LIMITS,
+  hasOnlyKeys,
+  isRecord,
+  isUuid,
+  jsonByteLength,
+  parseChatRequest,
+  parseChatSuccessResponse,
+  parseTrimmedString,
+  toChatRequest,
+} from "@/lib/chat/contract";
+import type { ChatRequest, Task } from "@/lib/chat/types";
 
 /**
- * Demo state machine + localStorage persistence (docs/features/00-overview.md §5).
- *
- * A single reducer drives the whole flow so phase transitions are explicit and
- * the state serializes in one piece. Chat transcripts are deliberately NOT part
- * of this state — only results survive a reload (00 §5, §6 원칙 4 보존 범위).
+ * 대화형 데모의 복원, 대화 정리, 완료 조정과 직접 편집을 담당한다.
+ * 브라우저 저장소는 주입 가능하게 두어 상태 전환을 결정론적으로 검증한다.
  */
 
-export const DEMO_STORAGE_KEY = "untangle:demo:v1";
+export const DEMO_STORAGE_KEY = "untangle:demo:v2";
+export const INITIAL_GREETING =
+  "안녕하세요. 요즘 머릿속을 복잡하게 만드는 일이 있나요?";
+export const RETRY_MESSAGE =
+  "응답을 받지 못했어요. 잠시 후 다시 시도해 주세요.";
+export const REQUEST_TOO_LARGE_MESSAGE =
+  "한 번에 보낼 내용이 너무 많아요. 입력을 줄여 주세요.";
 
-export const initialDemoState: DemoState = {
-  version: 1,
-  phase: "braindump",
-  braindump: "",
-  candidates: [],
-  cards: [],
-  splittingCardId: null,
-  slideupShown: false,
-};
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_REQUEST_MESSAGES = CHAT_LIMITS.messages - 1;
 
-export type DemoAction =
-  | { type: "restore"; state: DemoState }
-  | { type: "reset" }
-  /** Braindump accepted → candidates arrived (02 §5). */
-  | { type: "candidatesReceived"; braindump: string; candidates: Candidate[] }
-  /** "다시 쏟아내기" — back to braindump, keeping text for prefill (02 §3.2). */
-  | { type: "backToBraindump" }
-  /** 1~3 candidates confirmed → promoted to cards, on to the split offer. */
-  | { type: "confirmTodos"; selected: Candidate[] }
-  /** Split offer: picked a card / skipped straight to today (03 §3.1). */
-  | { type: "pickSplitCard"; cardId: string }
-  | { type: "skipSplit" }
-  /** Leave the split panel without confirming ("확정 or 뒤로" — 03 §5). */
-  | { type: "toToday" }
-  /** Today re-entry: split an undivided card or reopen a split plan (03 §3.3). */
-  | { type: "startSplit"; cardId: string }
-  /** A split plan (or re-split) confirmed → attach to the card (03 §5). */
-  | {
-      type: "splitConfirmed";
-      cardId: string;
-      tasks: Task[];
-      firstStep: Task;
-      answers: Answer[];
-    }
-  /** 재생성 1회 소비 — 카드에 누적해 패널을 다시 열어도 이어지게 한다 (03 §3.3). */
-  | { type: "resplitUsed"; cardId: string }
-  | { type: "toggleFirstStep"; cardId: string }
-  | { type: "toggleSubtask"; cardId: string; subtaskId: string }
-  /** Undivided cards only — split cards complete via their subtasks (04 §3.2). */
-  | { type: "toggleCardDone"; cardId: string }
-  | { type: "slideupShown" };
-
-const MAX_TODOS = 3;
-// 기본 제안은 5개 이하지만, 다시 쪼개기를 거치면 최대 10개까지 제안된다.
-const MAX_SUBTASKS = 10;
-
-function promote(candidate: Candidate, index: number): DemoCard {
-  return {
-    id: `c${index}`,
-    title: candidate.title,
-    big: candidate.big,
-    done: false,
-    firstStep: null,
-    subtasks: [],
-    splitAnswers: [],
-    resplitCount: 0,
-  };
+export interface DemoStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
 }
 
-/**
- * Rebuild a card's subtasks from a confirmed plan, preserving `done` on items
- * whose title survived the re-split (03 §3.3 — 재확정 시 유지 항목의 done 보존).
- */
-function buildSubtasks(
-  cardId: string,
-  tasks: Task[],
-  previous: DemoSubtask[],
-): DemoSubtask[] {
-  const remaining = [...previous];
-  return tasks.slice(0, MAX_SUBTASKS).map((task, i) => {
-    const keptIndex = remaining.findIndex((s) => s.title === task.title);
-    const kept = keptIndex >= 0 ? remaining.splice(keptIndex, 1)[0] : null;
-    return {
-      id: `${cardId}-${i}`,
-      title: task.title,
-      done: kept?.done ?? false,
-    };
-  });
+export type PreparedChatRequest =
+  | { ok: true; request: ChatRequest }
+  | { ok: false; reason: "invalid_state" | "request_too_large" };
+
+/** 브라우저에서 만든 식별자가 UUIDv4인지 확인한다. */
+export function isUuidV4(value: unknown): value is string {
+  return typeof value === "string" && UUID_V4_PATTERN.test(value.trim());
 }
 
-function updateCard(
-  state: DemoState,
-  cardId: string,
-  update: (card: DemoCard) => DemoCard,
-): DemoState {
-  return {
-    ...state,
-    cards: state.cards.map((c) => (c.id === cardId ? update(c) : c)),
-  };
-}
-
-/**
- * 저장 상태를 이어하기로 되살릴 때의 정규화.
- * - 쪼개기는 고르기 화면부터 재개한다 (03 §6) — 진행 중이던 clarify 문답은
- *   의도적으로 유실을 허용하며, 패널로 직행하면 사용자 행동 없이 advance
- *   호출이 나가므로 splittingCardId를 비운다.
- * - 카드 없이 split/today에 도달한 손상 상태는 뒤로 되돌린다 (04 §5).
- * - resplitCount가 없던 시절의 저장 상태는 0으로 채운다. 버전을 올려 통째로
- *   버리면 진행 중이던 방문자의 "이어서 하기"가 사라지므로 채워서 살린다.
- */
-function normalizeRestored(state: DemoState): DemoState {
-  const next: DemoState = {
-    ...state,
-    splittingCardId: null,
-    cards: state.cards.map((card) => ({
-      ...card,
-      resplitCount:
-        typeof card.resplitCount === "number" && card.resplitCount >= 0
-          ? card.resplitCount
-          : 0,
-    })),
-  };
+function parseTaskSummary(value: unknown): TaskSummary | null {
   if (
-    (next.phase === "split" || next.phase === "today") &&
-    next.cards.length === 0
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["count", "titles"]) ||
+    typeof value.count !== "number" ||
+    !Number.isInteger(value.count) ||
+    value.count < 0 ||
+    value.count > CHAT_LIMITS.tasks ||
+    !Array.isArray(value.titles) ||
+    value.titles.length > 3 ||
+    value.titles.length > value.count
   ) {
-    next.phase = next.candidates.length > 0 ? "candidates" : "braindump";
+    return null;
   }
-  return next;
+  const titles: string[] = [];
+  for (const candidate of value.titles) {
+    const title = parseTrimmedString(candidate, CHAT_LIMITS.taskTitle);
+    if (!title) return null;
+    titles.push(title);
+  }
+  return { count: value.count, titles };
 }
 
-export function demoReducer(state: DemoState, action: DemoAction): DemoState {
+function parseStoredMessage(value: unknown): StoredMessage | null {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["id", "role", "content", "taskSummary"])
+  ) {
+    return null;
+  }
+  const id = typeof value.id === "string" ? value.id.trim() : value.id;
+  const role = typeof value.role === "string" ? value.role.trim() : value.role;
+  const content = parseTrimmedString(value.content, CHAT_LIMITS.messageContent);
+  if (!isUuidV4(id) || (role !== "user" && role !== "assistant") || !content) {
+    return null;
+  }
+  if (!Object.hasOwn(value, "taskSummary")) return { id, role, content };
+  if (role !== "assistant") return null;
+  const taskSummary = parseTaskSummary(value.taskSummary);
+  return taskSummary ? { id, role, content, taskSummary } : null;
+}
+
+function normalizeTasks(value: unknown): Task[] | null {
+  const result = parseChatSuccessResponse(
+    { type: "tasks", message: "목록", tasks: value },
+    200,
+  );
+  return result.ok && result.value.type === "tasks" ? result.value.tasks : null;
+}
+
+function allItemIds(tasks: readonly Task[]): Map<string, string> {
+  const ids = new Map<string, string>();
+  for (const task of tasks) {
+    ids.set(task.id.toLowerCase(), task.id);
+    for (const subtask of task.subtasks) {
+      ids.set(subtask.id.toLowerCase(), subtask.id);
+    }
+  }
+  return ids;
+}
+
+function parseCompletedIds(
+  value: unknown,
+  tasks: readonly Task[],
+): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = allItemIds(tasks);
+  const nonLeafParents = new Set(
+    tasks
+      .filter((task) => task.subtasks.length > 0)
+      .map((task) => task.id.toLowerCase()),
+  );
+  const seen = new Set<string>();
+  const completedIds: string[] = [];
+  for (const candidate of value) {
+    if (typeof candidate !== "string") return null;
+    const id = candidate.trim();
+    const key = id.toLowerCase();
+    if (
+      !isUuid(id) ||
+      seen.has(key) ||
+      nonLeafParents.has(key) ||
+      !ids.has(key)
+    ) {
+      return null;
+    }
+    seen.add(key);
+    completedIds.push(ids.get(key)!);
+  }
+  return completedIds;
+}
+
+/** 알 수 없는 필드를 포함한 v2 저장 스냅샷을 전체 단위로 거절한다. */
+export function parseStoredDemoState(value: unknown): StoredDemoState | null {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      "version",
+      "messages",
+      "tasks",
+      "completedIds",
+      "todayUnread",
+      "historyTrimmed",
+    ]) ||
+    value.version !== 2 ||
+    !Array.isArray(value.messages) ||
+    value.messages.length === 0 ||
+    value.messages.length > CHAT_LIMITS.messages ||
+    typeof value.todayUnread !== "boolean" ||
+    typeof value.historyTrimmed !== "boolean"
+  ) {
+    return null;
+  }
+  const messages: StoredMessage[] = [];
+  const messageIds = new Set<string>();
+  for (const candidate of value.messages) {
+    const message = parseStoredMessage(candidate);
+    const key = message?.id.toLowerCase();
+    if (!message || !key || messageIds.has(key)) return null;
+    messageIds.add(key);
+    messages.push(message);
+  }
+  for (let index = 1; index < messages.length; index += 1) {
+    if (messages[index - 1]?.role === messages[index]?.role) return null;
+  }
+  const tasks = normalizeTasks(value.tasks);
+  if (!tasks) return null;
+  const completedIds = parseCompletedIds(value.completedIds, tasks);
+  if (!completedIds) return null;
+  return {
+    version: 2,
+    messages,
+    tasks,
+    completedIds,
+    todayUnread: value.todayUnread,
+    historyTrimmed: value.historyTrimmed,
+  };
+}
+
+function cloneTasks(tasks: readonly Task[]): Task[] {
+  return tasks.map((task) => ({
+    ...task,
+    subtasks: task.subtasks.map((subtask) => ({ ...subtask })),
+  }));
+}
+
+function cloneMessages(messages: readonly StoredMessage[]): StoredMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    ...(message.taskSummary
+      ? {
+          taskSummary: {
+            count: message.taskSummary.count,
+            titles: [...message.taskSummary.titles],
+          },
+        }
+      : {}),
+  }));
+}
+
+/** 런타임 전용 필드를 제외한 저장 스냅샷을 만든다. */
+export function toStoredDemoState(state: DemoRuntimeState): StoredDemoState {
+  return {
+    version: 2,
+    messages: cloneMessages(state.messages),
+    tasks: cloneTasks(state.tasks),
+    completedIds: [...state.completedIds],
+    todayUnread: state.todayUnread,
+    historyTrimmed: state.historyTrimmed,
+  };
+}
+
+function browserStorage(): DemoStorage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 새 v2 키만 읽고, 접근 실패나 손상된 값에는 null을 반환한다. */
+export function loadStoredDemoState(
+  storage: DemoStorage | null = browserStorage(),
+): StoredDemoState | null {
+  try {
+    const raw = storage?.getItem(DEMO_STORAGE_KEY);
+    return raw ? parseStoredDemoState(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 복원이 끝난 유효 상태만 v2 키에 저장하고 성공 여부를 반환한다. */
+export function saveStoredDemoState(
+  state: DemoRuntimeState,
+  storage: DemoStorage | null = browserStorage(),
+): boolean {
+  if (!state.hydrated || !storage) return false;
+  const snapshot = parseStoredDemoState(toStoredDemoState(state));
+  if (!snapshot) return false;
+  try {
+    storage.setItem(DEMO_STORAGE_KEY, JSON.stringify(snapshot));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 첫 인사를 가진 아직 복원되지 않은 런타임 상태를 만든다. */
+export function createInitialDemoState(messageId: string): DemoRuntimeState {
+  const message = parseStoredMessage({
+    id: messageId,
+    role: "assistant",
+    content: INITIAL_GREETING,
+  });
+  if (!message) throw new TypeError("첫 메시지 ID는 UUIDv4여야 해요.");
+  return {
+    version: 2,
+    messages: [message],
+    tasks: [],
+    completedIds: [],
+    todayUnread: false,
+    historyTrimmed: false,
+    activeTab: "chat",
+    request: { status: "idle", errorMessage: null },
+    hydrated: false,
+  };
+}
+
+function runtimeFromStored(stored: StoredDemoState): DemoRuntimeState {
+  return {
+    ...stored,
+    messages: cloneMessages(stored.messages),
+    tasks: cloneTasks(stored.tasks),
+    completedIds: [...stored.completedIds],
+    activeTab: "chat",
+    request:
+      stored.messages.at(-1)?.role === "user"
+        ? {
+            status: "retry",
+            errorMessage: null,
+            previousAttemptId: null,
+          }
+        : { status: "idle", errorMessage: null },
+    hydrated: true,
+  };
+}
+
+function removeOldestConversation(messages: StoredMessage[]): boolean {
+  if (messages.length <= 1) return false;
+  if (messages[0]?.role === "assistant") {
+    messages.splice(0, 1);
+    return true;
+  }
+  for (let index = 0; index + 1 < messages.length - 1; index += 1) {
+    if (
+      messages[index]?.role === "user" &&
+      messages[index + 1]?.role === "assistant"
+    ) {
+      messages.splice(index, 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function requestIsValid(
+  messages: readonly StoredMessage[],
+  tasks: readonly Task[],
+): boolean {
+  if (messages.length > MAX_REQUEST_MESSAGES) return false;
+  const request = toChatRequest(messages, tasks);
+  return (
+    jsonByteLength(request) <= CHAT_LIMITS.bodyBytes &&
+    parseChatRequest(request).ok
+  );
+}
+
+/** 응답 한 자리를 남기며 가장 오래된 완결 대화부터 요청 크기를 줄인다. */
+export function trimMessagesForRequest(
+  messages: readonly StoredMessage[],
+  tasks: readonly Task[],
+): { messages: StoredMessage[]; didTrim: boolean; canSend: boolean } {
+  const next = cloneMessages(messages);
+  let didTrim = false;
+  while (!requestIsValid(next, tasks)) {
+    if (!removeOldestConversation(next)) break;
+    didTrim = true;
+  }
+  return { messages: next, didTrim, canSend: requestIsValid(next, tasks) };
+}
+
+/** 현재 상태에서 UI 전용 필드를 뺀 전송 요청을 만든다. */
+export function prepareChatRequest(
+  state: DemoRuntimeState,
+): PreparedChatRequest {
+  const request = toChatRequest(state.messages, state.tasks);
+  if (jsonByteLength(request) > CHAT_LIMITS.bodyBytes) {
+    return { ok: false, reason: "request_too_large" };
+  }
+  if (
+    state.messages.length > MAX_REQUEST_MESSAGES ||
+    !parseChatRequest(request).ok
+  ) {
+    return { ok: false, reason: "invalid_state" };
+  }
+  return { ok: true, request };
+}
+
+function completedSet(completedIds: readonly string[]): Set<string> {
+  return new Set(completedIds.map((id) => id.toLowerCase()));
+}
+
+/** 서브태스크가 있는 부모는 자식 전체로, leaf 부모는 자신의 ID로 완료를 판단한다. */
+export function isTaskCompleted(
+  task: Task,
+  completedIds: readonly string[],
+): boolean {
+  const completed = completedSet(completedIds);
+  return task.subtasks.length > 0
+    ? task.subtasks.every((subtask) => completed.has(subtask.id.toLowerCase()))
+    : completed.has(task.id.toLowerCase());
+}
+
+function canonicalCompletedIds(
+  tasks: readonly Task[],
+  completed: ReadonlySet<string>,
+): string[] {
+  const ids: string[] = [];
+  for (const task of tasks) {
+    if (task.subtasks.length === 0) {
+      if (completed.has(task.id.toLowerCase())) ids.push(task.id);
+    } else {
+      for (const subtask of task.subtasks) {
+        if (completed.has(subtask.id.toLowerCase())) ids.push(subtask.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/** 목록 스냅샷 교체 뒤에도 남아 있는 같은 ID의 완료 의미를 보존한다. */
+export function reconcileCompletedIds(
+  previousTasks: readonly Task[],
+  nextTasks: readonly Task[],
+  completedIds: readonly string[],
+): string[] {
+  const nextIds = allItemIds(nextTasks);
+  const completed = completedSet(completedIds);
+  const reconciled = new Set([...completed].filter((id) => nextIds.has(id)));
+  const previousById = new Map(
+    previousTasks.map((task) => [task.id.toLowerCase(), task]),
+  );
+
+  for (const task of nextTasks) {
+    const taskId = task.id.toLowerCase();
+    if (task.subtasks.length > 0) {
+      reconciled.delete(taskId);
+      continue;
+    }
+    const previous = previousById.get(taskId);
+    if (previous?.subtasks.length) {
+      if (isTaskCompleted(previous, completedIds)) reconciled.add(taskId);
+      else reconciled.delete(taskId);
+    }
+  }
+  return canonicalCompletedIds(nextTasks, reconciled);
+}
+
+function findTask(tasks: readonly Task[], id: string): Task | undefined {
+  const key = id.toLowerCase();
+  return tasks.find((task) => task.id.toLowerCase() === key);
+}
+
+function moveTaskToGroupEnd(
+  tasks: readonly Task[],
+  taskId: string,
+  completedIds: readonly string[],
+): Task[] {
+  const key = taskId.toLowerCase();
+  const moved = tasks.find((task) => task.id.toLowerCase() === key);
+  if (!moved) return [...tasks];
+  const remaining = tasks.filter((task) => task.id.toLowerCase() !== key);
+  const incomplete = remaining.filter(
+    (task) => !isTaskCompleted(task, completedIds),
+  );
+  const complete = remaining.filter((task) =>
+    isTaskCompleted(task, completedIds),
+  );
+  (isTaskCompleted(moved, completedIds) ? complete : incomplete).push(moved);
+  return [...incomplete, ...complete];
+}
+
+function replaceTasks(
+  state: DemoRuntimeState,
+  value: unknown,
+): DemoRuntimeState {
+  const tasks = normalizeTasks(value);
+  if (!tasks) return state;
+  return {
+    ...state,
+    tasks,
+    completedIds: reconcileCompletedIds(state.tasks, tasks, state.completedIds),
+    todayUnread: state.activeTab !== "today",
+  };
+}
+
+function editIsLocked(state: DemoRuntimeState): boolean {
+  return state.request.status === "pending";
+}
+
+function reorder<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from < 0 || from >= items.length || to < 0 || to >= items.length) {
+    return [...items];
+  }
+  return arrayMove([...items], from, to);
+}
+
+function applyEditedTasks(
+  state: DemoRuntimeState,
+  value: Task[],
+  movedTaskId?: string,
+): DemoRuntimeState {
+  const tasks = normalizeTasks(value);
+  if (!tasks) return state;
+  const before = movedTaskId ? findTask(state.tasks, movedTaskId) : undefined;
+  const completedIds = reconcileCompletedIds(
+    state.tasks,
+    tasks,
+    state.completedIds,
+  );
+  const after = movedTaskId ? findTask(tasks, movedTaskId) : undefined;
+  const changedGroup =
+    before &&
+    after &&
+    isTaskCompleted(before, state.completedIds) !==
+      isTaskCompleted(after, completedIds);
+  return {
+    ...state,
+    tasks: changedGroup
+      ? moveTaskToGroupEnd(tasks, movedTaskId!, completedIds)
+      : tasks,
+    completedIds,
+  };
+}
+
+/** 저장·네트워크와 무관하게 데모의 모든 상태 전환을 적용한다. */
+export function demoStateReducer(
+  state: DemoRuntimeState,
+  action: DemoAction,
+): DemoRuntimeState {
   switch (action.type) {
-    case "restore":
-      return normalizeRestored(action.state);
-    case "reset":
-      return initialDemoState;
-    case "candidatesReceived":
+    case "hydrate": {
+      const stored = action.stored ? parseStoredDemoState(action.stored) : null;
+      const fallback = parseStoredDemoState(toStoredDemoState(state));
+      if (stored) return runtimeFromStored(stored);
+      if (fallback) return runtimeFromStored(fallback);
       return {
         ...state,
-        phase: "candidates",
-        braindump: action.braindump,
-        candidates: action.candidates,
+        activeTab: "chat",
+        request: { status: "idle", errorMessage: null },
+        hydrated: true,
       };
-    case "backToBraindump":
-      return { ...state, phase: "braindump" };
-    case "confirmTodos": {
-      const cards = action.selected.slice(0, MAX_TODOS).map(promote);
-      if (cards.length === 0) return state;
-      return { ...state, phase: "split", cards, splittingCardId: null };
     }
-    case "pickSplitCard":
-      return { ...state, phase: "split", splittingCardId: action.cardId };
-    case "skipSplit":
-    case "toToday":
-      return { ...state, phase: "today", splittingCardId: null };
-    case "startSplit":
-      return { ...state, phase: "split", splittingCardId: action.cardId };
-    case "splitConfirmed": {
-      const next = updateCard(state, action.cardId, (card) => ({
-        ...card,
-        done: false,
-        subtasks: buildSubtasks(action.cardId, action.tasks, card.subtasks),
-        firstStep: {
-          title: action.firstStep.title,
-          done:
-            card.firstStep?.title === action.firstStep.title
-              ? card.firstStep.done
-              : false,
-        },
-        splitAnswers: action.answers,
-      }));
-      return { ...next, phase: "today", splittingCardId: null };
-    }
-    case "resplitUsed":
-      // 상한 자체는 useSplitFlow가 지킨다 — 여기서는 사용량만 누적한다.
-      return updateCard(state, action.cardId, (card) => ({
-        ...card,
-        resplitCount: card.resplitCount + 1,
-      }));
-    case "toggleFirstStep":
-      return updateCard(state, action.cardId, (card) =>
-        card.firstStep
+    case "submitUserMessage": {
+      if (
+        !state.hydrated ||
+        state.request.status !== "idle" ||
+        !isUuidV4(action.attemptId)
+      ) {
+        return state;
+      }
+      const message = parseStoredMessage({
+        id: action.id,
+        role: "user",
+        content: action.content,
+      });
+      if (
+        !message ||
+        state.messages.some(
+          (candidate) =>
+            candidate.id.toLowerCase() === message.id.toLowerCase(),
+        )
+      ) {
+        return state;
+      }
+      const trimmed = trimMessagesForRequest(
+        [...state.messages, message],
+        state.tasks,
+      );
+      return {
+        ...state,
+        messages: trimmed.messages,
+        historyTrimmed: state.historyTrimmed || trimmed.didTrim,
+        request: trimmed.canSend
           ? {
-              ...card,
-              firstStep: { ...card.firstStep, done: !card.firstStep.done },
+              status: "pending",
+              errorMessage: null,
+              attemptId: action.attemptId.trim(),
             }
-          : card,
-      );
-    case "toggleSubtask":
-      return updateCard(state, action.cardId, (card) => ({
-        ...card,
-        subtasks: card.subtasks.map((s) =>
-          s.id === action.subtaskId ? { ...s, done: !s.done } : s,
+          : {
+              status: "retry",
+              errorMessage: REQUEST_TOO_LARGE_MESSAGE,
+              previousAttemptId: null,
+            },
+      };
+    }
+    case "retryRequest": {
+      if (
+        state.request.status !== "retry" ||
+        state.messages.at(-1)?.role !== "user" ||
+        !isUuidV4(action.attemptId) ||
+        state.request.previousAttemptId?.toLowerCase() ===
+          action.attemptId.trim().toLowerCase()
+      ) {
+        return state;
+      }
+      const trimmed = trimMessagesForRequest(state.messages, state.tasks);
+      return {
+        ...state,
+        messages: trimmed.messages,
+        historyTrimmed: state.historyTrimmed || trimmed.didTrim,
+        request: trimmed.canSend
+          ? {
+              status: "pending",
+              errorMessage: null,
+              attemptId: action.attemptId.trim(),
+            }
+          : {
+              status: "retry",
+              errorMessage: REQUEST_TOO_LARGE_MESSAGE,
+              previousAttemptId: state.request.previousAttemptId,
+            },
+      };
+    }
+    case "failRequest":
+      return state.request.status === "pending" &&
+        isUuidV4(action.attemptId) &&
+        state.request.attemptId.toLowerCase() ===
+          action.attemptId.trim().toLowerCase()
+        ? {
+            ...state,
+            request: {
+              status: "retry",
+              errorMessage:
+                parseTrimmedString(action.message, CHAT_LIMITS.errorMessage) ??
+                RETRY_MESSAGE,
+              previousAttemptId: state.request.attemptId,
+            },
+          }
+        : state;
+    case "receiveResponse": {
+      if (
+        state.request.status !== "pending" ||
+        !isUuidV4(action.attemptId) ||
+        state.request.attemptId.toLowerCase() !==
+          action.attemptId.trim().toLowerCase()
+      ) {
+        return state;
+      }
+      const responseId =
+        typeof action.id === "string" ? action.id.trim() : action.id;
+      if (
+        !isUuidV4(responseId) ||
+        state.messages.some(
+          (message) => message.id.toLowerCase() === responseId.toLowerCase(),
+        )
+      ) {
+        return {
+          ...state,
+          request: {
+            status: "retry",
+            errorMessage: RETRY_MESSAGE,
+            previousAttemptId: state.request.attemptId,
+          },
+        };
+      }
+      const parsed = parseChatSuccessResponse(action.response, 200);
+      if (!parsed.ok) {
+        return {
+          ...state,
+          request: {
+            status: "retry",
+            errorMessage: RETRY_MESSAGE,
+            previousAttemptId: state.request.attemptId,
+          },
+        };
+      }
+      const response = parsed.value;
+      const message = parseStoredMessage({
+        id: responseId,
+        role: "assistant",
+        content: response.message,
+        ...(response.type === "tasks"
+          ? {
+              taskSummary: {
+                count: response.tasks.length,
+                titles: response.tasks.slice(0, 3).map((task) => task.title),
+              },
+            }
+          : {}),
+      });
+      if (!message || state.messages.length >= CHAT_LIMITS.messages) {
+        return {
+          ...state,
+          request: {
+            status: "retry",
+            errorMessage: RETRY_MESSAGE,
+            previousAttemptId: state.request.attemptId,
+          },
+        };
+      }
+      const withMessage: DemoRuntimeState = {
+        ...state,
+        messages: [...state.messages, message],
+        request: { status: "idle", errorMessage: null },
+      };
+      return response.type === "tasks"
+        ? replaceTasks(withMessage, response.tasks)
+        : withMessage;
+    }
+    case "changeTab":
+      return {
+        ...state,
+        activeTab: action.tab,
+        todayUnread: action.tab === "today" ? false : state.todayUnread,
+      };
+    case "addTask": {
+      if (editIsLocked(state) || !isUuidV4(action.id)) return state;
+      const next = applyEditedTasks(state, [
+        ...state.tasks,
+        {
+          id: action.id.trim(),
+          title: action.title,
+          description: action.description,
+          subtasks: [],
+        },
+      ]);
+      return next === state
+        ? state
+        : {
+            ...next,
+            tasks: moveTaskToGroupEnd(next.tasks, action.id, next.completedIds),
+          };
+    }
+    case "updateTask": {
+      if (editIsLocked(state) || !findTask(state.tasks, action.taskId)) {
+        return state;
+      }
+      const key = action.taskId.toLowerCase();
+      return applyEditedTasks(
+        state,
+        state.tasks.map((task) =>
+          task.id.toLowerCase() === key
+            ? {
+                ...task,
+                title: action.title,
+                description: action.description,
+              }
+            : task,
         ),
-      }));
-    case "toggleCardDone":
-      return updateCard(state, action.cardId, (card) =>
-        card.subtasks.length > 0 ? card : { ...card, done: !card.done },
       );
-    case "slideupShown":
-      return { ...state, slideupShown: true };
-  }
-}
-
-/** 쪼갠 카드 = 서브태스크 전부 done / 미분해 카드 = 카드 체크 (04 §4). */
-export function isCardDone(card: DemoCard): boolean {
-  if (card.subtasks.length > 0) return card.subtasks.every((s) => s.done);
-  return card.done;
-}
-
-/** Any check anywhere — the demo's success signal and slide-up trigger (04 §3.4). */
-export function hasAnyCheck(state: DemoState): boolean {
-  return state.cards.some(
-    (c) => c.done || c.firstStep?.done || c.subtasks.some((s) => s.done),
-  );
-}
-
-/** Worth offering "이어서 하기"? (01 §3.4 — braindump 원문 이상 진행) */
-export function isResumable(state: DemoState): boolean {
-  return (
-    state.phase !== "braindump" ||
-    state.braindump.trim().length > 0 ||
-    state.candidates.length > 0
-  );
-}
-
-function isValidCandidate(value: unknown): value is Candidate {
-  if (!value || typeof value !== "object") return false;
-  const c = value as Candidate;
-  return typeof c.title === "string" && typeof c.big === "boolean";
-}
-
-function isValidSubtask(value: unknown): value is DemoSubtask {
-  if (!value || typeof value !== "object") return false;
-  const s = value as DemoSubtask;
-  return (
-    typeof s.id === "string" &&
-    typeof s.title === "string" &&
-    typeof s.done === "boolean"
-  );
-}
-
-function isValidCard(value: unknown): value is DemoCard {
-  if (!value || typeof value !== "object") return false;
-  const c = value as DemoCard;
-  return (
-    typeof c.id === "string" &&
-    typeof c.title === "string" &&
-    typeof c.big === "boolean" &&
-    typeof c.done === "boolean" &&
-    (c.firstStep === null ||
-      (!!c.firstStep &&
-        typeof c.firstStep.title === "string" &&
-        typeof c.firstStep.done === "boolean")) &&
-    Array.isArray(c.subtasks) &&
-    c.subtasks.every(isValidSubtask) &&
-    // 쪼갠 카드에 firstStep이 없는 상태는 성립하지 않는다 (00 §5).
-    (c.subtasks.length === 0 || c.firstStep !== null) &&
-    Array.isArray(c.splitAnswers) &&
-    // 이 필드가 생기기 전의 저장 상태도 받아준다 — normalizeRestored가 0으로 채운다.
-    (c.resplitCount === undefined || typeof c.resplitCount === "number")
-  );
-}
-
-function isValidDemoState(value: unknown): value is DemoState {
-  if (!value || typeof value !== "object") return false;
-  const s = value as DemoState;
-  return (
-    s.version === 1 &&
-    ["braindump", "candidates", "split", "today"].includes(s.phase) &&
-    typeof s.braindump === "string" &&
-    Array.isArray(s.candidates) &&
-    s.candidates.every(isValidCandidate) &&
-    Array.isArray(s.cards) &&
-    s.cards.every(isValidCard) &&
-    (s.splittingCardId === null || typeof s.splittingCardId === "string") &&
-    typeof s.slideupShown === "boolean"
-  );
-}
-
-/** Returns null on missing, invalid, or version-mismatched state (01 §5). */
-export function loadDemoState(): DemoState | null {
-  try {
-    const raw = localStorage.getItem(DEMO_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isValidDemoState(parsed) ? parsed : null;
-  } catch {
-    return null; // storage blocked or corrupted — the demo still works (01 §5)
-  }
-}
-
-export function saveDemoState(state: DemoState): void {
-  try {
-    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore storage errors (private mode, quota) — 저장 없이 진행
-  }
-}
-
-export function clearDemoState(): void {
-  try {
-    localStorage.removeItem(DEMO_STORAGE_KEY);
-  } catch {
-    // ignore
+    }
+    case "deleteTask": {
+      if (editIsLocked(state) || !findTask(state.tasks, action.taskId)) {
+        return state;
+      }
+      const key = action.taskId.toLowerCase();
+      return applyEditedTasks(
+        state,
+        state.tasks.filter((task) => task.id.toLowerCase() !== key),
+      );
+    }
+    case "reorderTask": {
+      if (editIsLocked(state)) return state;
+      const from = state.tasks.findIndex(
+        (task) => task.id.toLowerCase() === action.taskId.toLowerCase(),
+      );
+      const to = state.tasks.findIndex(
+        (task) => task.id.toLowerCase() === action.overTaskId.toLowerCase(),
+      );
+      if (
+        from < 0 ||
+        to < 0 ||
+        from === to ||
+        isTaskCompleted(state.tasks[from]!, state.completedIds) !==
+          isTaskCompleted(state.tasks[to]!, state.completedIds)
+      ) {
+        return state;
+      }
+      return { ...state, tasks: reorder(state.tasks, from, to) };
+    }
+    case "addSubtask": {
+      if (
+        editIsLocked(state) ||
+        !isUuidV4(action.id) ||
+        !findTask(state.tasks, action.taskId)
+      ) {
+        return state;
+      }
+      const key = action.taskId.toLowerCase();
+      return applyEditedTasks(
+        state,
+        state.tasks.map((task) =>
+          task.id.toLowerCase() === key
+            ? {
+                ...task,
+                subtasks: [
+                  ...task.subtasks,
+                  { id: action.id.trim(), title: action.title },
+                ],
+              }
+            : task,
+        ),
+        action.taskId,
+      );
+    }
+    case "updateSubtask": {
+      if (editIsLocked(state)) return state;
+      const parent = findTask(state.tasks, action.taskId);
+      const subtaskKey = action.subtaskId.toLowerCase();
+      if (
+        !parent?.subtasks.some((item) => item.id.toLowerCase() === subtaskKey)
+      ) {
+        return state;
+      }
+      const taskKey = action.taskId.toLowerCase();
+      return applyEditedTasks(
+        state,
+        state.tasks.map((task) =>
+          task.id.toLowerCase() === taskKey
+            ? {
+                ...task,
+                subtasks: task.subtasks.map((item) =>
+                  item.id.toLowerCase() === subtaskKey
+                    ? { ...item, title: action.title }
+                    : item,
+                ),
+              }
+            : task,
+        ),
+      );
+    }
+    case "deleteSubtask": {
+      if (editIsLocked(state)) return state;
+      const parent = findTask(state.tasks, action.taskId);
+      const subtaskKey = action.subtaskId.toLowerCase();
+      if (
+        !parent?.subtasks.some((item) => item.id.toLowerCase() === subtaskKey)
+      ) {
+        return state;
+      }
+      const taskKey = action.taskId.toLowerCase();
+      return applyEditedTasks(
+        state,
+        state.tasks.map((task) =>
+          task.id.toLowerCase() === taskKey
+            ? {
+                ...task,
+                subtasks: task.subtasks.filter(
+                  (item) => item.id.toLowerCase() !== subtaskKey,
+                ),
+              }
+            : task,
+        ),
+        action.taskId,
+      );
+    }
+    case "reorderSubtask": {
+      if (editIsLocked(state)) return state;
+      const parent = findTask(state.tasks, action.taskId);
+      if (!parent) return state;
+      const from = parent.subtasks.findIndex(
+        (item) => item.id.toLowerCase() === action.subtaskId.toLowerCase(),
+      );
+      const to = parent.subtasks.findIndex(
+        (item) => item.id.toLowerCase() === action.overSubtaskId.toLowerCase(),
+      );
+      if (from < 0 || to < 0 || from === to) return state;
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === parent.id
+            ? { ...task, subtasks: reorder(task.subtasks, from, to) }
+            : task,
+        ),
+      };
+    }
+    case "toggleTaskCompletion": {
+      const task = findTask(state.tasks, action.taskId);
+      if (!task) return state;
+      const completed = completedSet(state.completedIds);
+      const shouldComplete = !isTaskCompleted(task, state.completedIds);
+      if (task.subtasks.length === 0) {
+        if (shouldComplete) completed.add(task.id.toLowerCase());
+        else completed.delete(task.id.toLowerCase());
+      } else {
+        for (const subtask of task.subtasks) {
+          if (shouldComplete) completed.add(subtask.id.toLowerCase());
+          else completed.delete(subtask.id.toLowerCase());
+        }
+        completed.delete(task.id.toLowerCase());
+      }
+      const completedIds = canonicalCompletedIds(state.tasks, completed);
+      return {
+        ...state,
+        tasks: moveTaskToGroupEnd(state.tasks, task.id, completedIds),
+        completedIds,
+      };
+    }
+    case "toggleSubtaskCompletion": {
+      const task = findTask(state.tasks, action.taskId);
+      const subtask = task?.subtasks.find(
+        (item) => item.id.toLowerCase() === action.subtaskId.toLowerCase(),
+      );
+      if (!task || !subtask) return state;
+      const wasCompleted = isTaskCompleted(task, state.completedIds);
+      const completed = completedSet(state.completedIds);
+      const key = subtask.id.toLowerCase();
+      if (completed.has(key)) completed.delete(key);
+      else completed.add(key);
+      completed.delete(task.id.toLowerCase());
+      const completedIds = canonicalCompletedIds(state.tasks, completed);
+      return {
+        ...state,
+        tasks:
+          wasCompleted !== isTaskCompleted(task, completedIds)
+            ? moveTaskToGroupEnd(state.tasks, task.id, completedIds)
+            : state.tasks,
+        completedIds,
+      };
+    }
   }
 }
